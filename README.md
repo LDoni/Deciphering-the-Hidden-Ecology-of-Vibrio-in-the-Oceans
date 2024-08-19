@@ -545,9 +545,69 @@ a1<-a+  geom_mark_ellipse(aes(color = Fraction), show.legend = FALSE)+ theme_voi
   theme_bw() +  scale_xsidey_continuous(breaks = NULL, labels = "", expand = expansion(c(0,.1))) +
   scale_ysidex_continuous(breaks = NULL, labels = "", expand = expansion(c(0,.1))) +scale_ysidex_discrete()+
   ggside::theme_ggside_void() 
+a1
+
+## PERMANOVA
+
+OTU_matrix = as(otu_table(physeq_MERGED_zone_FRACTION), "matrix") 
+OTUdf = as.data.frame(OTU_matrix)
+BC_TAX<-vegdist(t(OTUdf),method = "bray")
+env_data = as.data.frame(sample_data(physeq_MERGED_zone_FRACTION))
+adonis2(BC_TAX~env_data$Fraction*env_data$Ocean, permutations = 9999)
+
+## Mantel between bray taxonomy and kmers matrices 
+BC_TAX<-vegdist(t(OTUdf),method = "bray")
+BC_kmers=as.matrix(read.table("mat_abundance_braycurtis.csv",sep=";", header=TRUE, row.names=1))
+BC_kmers[upper.tri(BC_kmers)] <- 0
+BC_kmersDist <- as.dist(BC_kmers, diag = TRUE)
+df <- data.frame( Kmers=BC_kmersDist[lower.tri(BC_kmersDist)], TAX=as.dist(BC_TAX)[lower.tri(as.dist(BC_TAX))])
+set.seed(1234)
+mantel(xdis =BC_TAX ,ydis = BC_kmersDist,method = "pearson",permutations = 9999)
 
 
 
+## Plot Fig 1D k-PCoA
+iMDS  <- ordinate(physeq_MERGED_zone_FRACTION, "PCoA", distance=BC_kmersDist)  
+ physeq_MERGED_zone_FRACTION_kmears<-physeq_MERGED_zone_FRACTION
+ sample_names(physeq_MERGED_zone_FRACTION_kmears)
+ 
+ 
+ ### cambio i nomi
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("*_FLB$", "_BACT",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("*_PAB$", "_PROT", sample_names(physeq_MERGED_zone_FRACTION_kmears))
+ 
+ 
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ANE_(\\w+)", "\\1_ANE",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ANW_(\\w+)", "\\1_ANW",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ARC_(\\w+)", "\\1_ARC",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ASE_(\\w+)", "\\1_ASE",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ASW_(\\w+)", "\\1_ASW",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ION_(\\w+)", "\\1_ION",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("IOS_(\\w+)", "\\1_IOS",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("MED_(\\w+)", "\\1_MED",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("PON_(\\w+)", "\\1_PON",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("PSE_(\\w+)", "\\1_PSE",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("PSW_(\\w+)", "\\1_PSW",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("RED_(\\w+)", "\\1_RED",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("SOC_(\\w+)", "\\1_SOC",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
+ 
+  sample_data(physeq_MERGED_zone_FRACTION_kmears)<-sample_data(read.csv("sample_data_physeq_MERGED_zone_FRACTION.csv",row.names=1, check.names=FALSE,sep = ";"))
+  
+  
+ 
+ 
+plot_ordination(physeq_MERGED_zone_FRACTION_kmears, iMDS,color = "Ocean",shape = "Ocean",
+                   axes =c(1,2))+
+  geom_text(aes(label=Zone), size = 3, vjust = 0,hjust=0, show.legend = FALSE)+
+  theme(plot.title = element_text(hjust = 0.0))+ geom_point(size = 2)+ theme_void()+theme_bw()+
+  geom_mark_ellipse(aes(color = Fraction ), show.legend = FALSE)+ theme_void()+theme_bw() + 
+  geom_xsidedensity(aes(y=stat(density),fill=Fraction), alpha = 0.5, show.legend = FALSE) +
+  geom_ysidedensity(aes(x=stat(density),fill=Ocean), alpha = 0.5, show.legend = FALSE) +
+  theme_bw() +  scale_xsidey_continuous(breaks = NULL, labels = "", expand = expansion(c(0,.1))) +
+  scale_ysidex_continuous(breaks = NULL, labels = "", expand = expansion(c(0,.1))) +scale_ysidex_discrete()+
+  ggside::theme_ggside_void() 
+
+ 
 
 
 
@@ -567,34 +627,90 @@ cat $SAMPLE | parallel -j 10 \
 -o2 ${ENT_OUT}/{}_extracted_reads_vibrio_entero_2.fa"
 
 
+##  simka all samples 
+
+simka -in imput_simka_PAV.txt -out results_PAV -kmer-size 31  -max-merge 4 -max-reads 0 -min-shannon-index 1.5
+simka -in imput_simka_FLV.txt -out results_FLV -kmer-size 31  -max-merge 4 -max-reads 0 -min-shannon-index 1.5
+
+
 
 ## simka only superficial samples 
+simka -in input_sinka_derep_SRF.txt -out simka_SRF -kmer-size 31 -max-reads 0 -min-shannon-index 1.5
 
 
-for i in *_1.fastq
+
+
+
+
+
+#co-assembly per zone
+
+cat sets.txt
+ARC
+ANE
+ANW
+ASE
+ASW
+ION
+IOS
+MED
+PON
+PSE
+PSW
+RED
+SOC
+
+for SET in `cat sets.txt`
 do
-sample=$(echo "$i" | cut -d "_" -f1-2)
-#echo $sample
-
-R1s=`ls ${sample}*_1.fastq | python -c 'import sys; print(" , ".join([x.strip() for x in sys.stdin.readlines()]))'`
-R2s=`ls ${sample}*_2.fastq | python -c 'import sys; print(" , ".join([x.strip() for x in sys.stdin.readlines()]))'`
-echo "${sample}: ${R1s} ; ${R2s}" >> input_sinka.txt
+R1s=`ls *_1.fa | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+R2s=`ls *_2.fa | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
+ megahit -1 $R1s -2 $R2s -o $SET-co-assembly.fa 
 done
 
 
 
-awk '!seen[$0]++' input_sinka.txt >input_sinka_derep.txt
+# CAT TAXONOMY sui contigs 
+
+for i in *.fa
+do
+CAT contigs -c $i -d /home/userbio/CAT_prepare_20210107/2021-01-07_CAT_database -t /home/userbio/CAT_prepare_20210107/2021-01-07_taxonomy -o BAT_output/${i}_BAT
+CAT add_names -i BAT_output/${i}_BAT.contig2classification.txt -o BAT_off/${i}_.names_off.txt -t /home/userbio/CAT_prepare_20210107/2021-01-07_taxonomy --only_official
+CAT summarise -c $i -i BAT_off/${i}_.names_off.txt -o BAT_class/${i}_BAT_summ.txt
+done
 
 
-mkdir simka
+#quantification on contigs with salmon
 
-/home/userbio/simka/build/bin/simka -in input_sinka_derep.txt -out simka -out-tmp simka/temp_output -kmer-size 31 -max-reads 0 -min-shannon-index 1.5
+for i in *.fa
+do
+    prefix=$(basename $i .fa)
+    salmon index -t $i -i ${prefix}_index 
+    mv ${prefix}_index salmon
+done
+
+for i in *BACT*_index
+do
+prefix=$(basename $i _index)
+sample=$(echo "$prefix" | cut -d "_" -f2)
+echo $sample
+salmon quant --meta -l A --index $i \
+-1 ${sample}_ALL_READS_1.fa \
+-2 ${sample}_ALL_READS_2.fa \
+ -o quantification/${prefix}
+done
 
 
 
-
-
-
+for i in *PROT*_index
+do
+prefix=$(basename $i _index)
+sample=$(echo "$prefix" | cut -d "_" -f2)
+echo $sample
+salmon quant --meta -l A --index $i  \
+-1 ${sample}_ALL_READS_1.fa \
+-2 ${sample}_ALL_READS_2.fa \
+-o quantification/${prefix}
+done
 
 
 
