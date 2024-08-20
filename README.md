@@ -627,17 +627,326 @@ cat $SAMPLE | parallel -j 10 \
 -o2 ${ENT_OUT}/{}_extracted_reads_vibrio_entero_2.fa"
 
 
-##  simka all samples 
+##  simka all samples --> used for the k-PCoA (fig 1D see line 599)
 
-simka -in imput_simka_PAV.txt -out results_PAV -kmer-size 31  -max-merge 4 -max-reads 0 -min-shannon-index 1.5
-simka -in imput_simka_FLV.txt -out results_FLV -kmer-size 31  -max-merge 4 -max-reads 0 -min-shannon-index 1.5
-
+simka -in imput_simka.txt -out results -kmer-size 31  -max-merge 4 -max-reads 0 -min-shannon-index 1.5
 
 
-## simka only superficial samples 
+
+
+## simka only superficial samples -> used for bioregions (Figure 2 A) and Vibrio surface dispersion through Oceans (fig 3B to G) 
 simka -in input_sinka_derep_SRF.txt -out simka_SRF -kmer-size 31 -max-reads 0 -min-shannon-index 1.5
 
 
+##################################################
+############# cumulative correlarions############# 
+##################################################
+library(ggplot2)
+library(plyr )
+files <- c("cytoscape/file_conx/SRF_0.22-3_TimTrav.csv",
+           "cytoscape/file_conx/SRF_5-20_TimTrav.csv",
+           "cytoscape/file_conx/SRF_20-180_TimTrav.csv",
+           "cytoscape/file_conx/SRF_180-2000_TimTrav.csv")
+
+computeConfidence <- function(rho,N){
+  upper <- tanh(atanh((rho+1.96)/sqrt(N-3)+0i))
+  lower <- tanh(atanh((rho-1.96)/sqrt(N-3)+0i))
+  return(c(Re(upper),Re(lower)))
+}
+
+
+
+cumCorr <- function(file_){
+  CC<-read.csv(file_,sep = ",")
+  CC<- CC[CC$tempo.medio.anni<=10,]
+  CC2 <- CC[order(CC$tempo.medio.anni),]
+  DB <- data.frame()
+  for(i in 4:dim(CC2)[1]) {
+    #print(i)
+    CC_1<-CC2[1:i,]
+    #print(CC_1)
+    cc <- cor.test(as.numeric(CC_1$tempo.medio.anni),as.numeric(CC_1$dissimilarity),method = "spearman")$estimate
+    ci <- computeConfidence(cc,i)
+    DB <- rbind(DB,c(CC2[i,11],cc))
+  }
+  return(DB)
+}
+
+DBs <- sapply(files,cumCorr)
+a <- data.frame(DBs[[1]], DBs[[2]], "0.22-3")
+b <- data.frame(DBs[[3]], DBs[[4]], "5-20")
+c <- data.frame(DBs[[5]], DBs[[6]], "20-180")
+d <- data.frame(DBs[[7]], DBs[[8]], "180-2000")
+
+# Creazione di una lista contenente i data frame
+dataframes <- list(a, b, c, d)
+
+# Loop per applicare le operazioni su tutti i data frame
+for (i in 1:length(dataframes)) {
+  colnames(dataframes[[i]])[1] <- "years.trav.time"
+  colnames(dataframes[[i]])[2] <- "R"
+  colnames(dataframes[[i]])[3] <- "Fraction"
+}
+
+# Assegnazione dei data frame modificati ad a, b, c, d
+a <- dataframes[[1]]
+b <- dataframes[[2]]
+c <- dataframes[[3]]
+d <- dataframes[[4]]
+allDF <- rbind(a, b,c,d)
+colnames(allDF)[1]<-"years.trav.time"
+newSTorder = c( "0.22-3","5-20","20-180" ,"180-2000")
+
+allDF$Fraction<- as.character(allDF$Fraction)
+allDF$Fraction <- factor(allDF$Fraction, levels=newSTorder) 
+
+#rangesssss
+allDF$years.trav.time_ranges<-round(allDF$years.trav.time+0.5)
+ 
+allDF$years.trav.time_ranges2<-round_any(allDF$years.trav.time, 0.5, f=ceiling)
+ 
+
+#### fig 3B
+ggplot(allDF, aes(x = years.trav.time, y = R, color = Fraction)) +
+    geom_point(alpha = 0.1) +#, color = "black"
+    geom_smooth(method = "gam", se = FALSE, formula = y ~ s(x, bs = "cs")) +  # Metodo GAM
+    scale_y_continuous(limit = c(-0.25, 0.75)) +
+    scale_x_continuous(limit = c(0.75, 5), breaks = round(seq(min(allDF$years.trav.time),
+                                                               max(allDF$years.trav.time),
+                                                               by = 0.5), 1)) +
+    labs(color = "")+
+  geom_smooth(method = "gam", se = FALSE, formula = y ~ s(x, bs = "cs"), color = "darkred", linetype = "dashed", size = 1.5) +
+    theme(panel.background = element_blank(),  # Background bianco
+          panel.grid.major = element_blank(),  # Griglia grigia
+          panel.grid.minor = element_blank())  # Nascondi griglia minore
+
+
+
+
+
+
+
+
+
+
+
+#########################################################
+###############correlazioni simi and trav time
+#######################################################
+
+
+
+
+
+library(reshape2)
+library(geodist)
+library(ggplot2)
+library(ggpubr)
+library(diffcor)
+
+
+coordinate<-read.csv2("cytoscape_samples_coordinates.csv",sep = ";")
+color_palette <- c("SRF_0.22-3" = "red", "SRF_5-20" = "blue", "SRF_20-180" = "green", "SRF_180-2000" = "purple")
+fraction_levels <- c("SRF_0.22-3", "SRF_5-20", "SRF_20-180", "SRF_180-2000")
+
+list2<-data.frame(coordinate$Longitude,coordinate$Latitude,coordinate$Sample)
+
+colnames(list2)
+colnames(list2)[1] ="longitude"
+colnames(list2)[2] ="latitude"
+colnames(list2)[3] ="name"
+
+distance_matrix <- geodist(list2, measure = 'geodesic' )/1000 #converting it to km
+
+#also, check for other measures in the description
+
+colnames(distance_matrix) <- list2$name
+rownames(distance_matrix) <- list2$name
+
+head.matrix(distance_matrix)
+
+
+
+mat=as.matrix(distance_matrix)
+melted<-reshape2::melt(mat)
+newDF<-melted
+ 
+
+newDF$merged<-paste(newDF$Var1,newDF$Var2,sep = "_")
+colnames(newDF)[4] ="conx"
+colnames(newDF)[3] ="dist_km"
+head(newDF)
+
+file_paths <- c(
+  "cytoscape/file_conx/SRF_0.22-3_TimTrav.csv",
+  "cytoscape/file_conx/SRF_5-20_TimTrav.csv",
+  "cytoscape/file_conx/SRF_20-180_TimTrav.csv",
+  "cytoscape/file_conx/SRF_180-2000_TimTrav.csv"
+)
+
+#head(read.csv("cytoscape/file_conx/SRF_0.22-3_TimTrav.csv", sep = ","))
+##### loop per legegre i dati e filtarre <  1.5 !!!
+
+correlation_data <- list()
+
+
+for (file_path in file_paths) {
+  cc <- read.csv(file_path, sep = ",")
+  name <- gsub("cytoscape/file_conx/|_TimTrav.csv", "", file_path)
+  cc$fraction <- rep(name, length(cc$conx))
+  merged_data <- merge(cc, newDF, by = "conx", all.x = TRUE)
+  merged_data <- merged_data[merged_data$tempo.medio.anni < 1.5,]
+  correlation_data[[name]] <- merged_data
+}
+
+
+# fig 3C
+
+plot <- ggplot()
+for (fraction in names(correlation_data)) {
+  df <- correlation_data[[fraction]]
+  df$fraction <- factor(reorder(df$fraction, -df$tempo.medio.anni), levels = fraction_levels)  # Definizione dei livelli della variabile "fraction" con ordine inverso della dist_km
+  plot <- plot + geom_smooth(data = df, aes(y = similarity, x = tempo.medio.anni, color = fraction), method = "lm") +
+    geom_smooth(data = df, aes(y = similarity, x = tempo.medio.anni), method = "lm", color = color_palette[fraction], fill = color_palette[fraction], alpha = 0.2)
+}
+
+# Ordinamento della legenda
+plot <- plot + scale_color_manual(values = color_palette, guide = guide_legend(order = 1))
+
+# Visualizzazione del plot
+plot
+#Fisher's z-Tests Concerning Difference of Correlations
+
+
+library(diffcor)
+
+# Creazione del dataframe vuoto
+df <- data.frame(fraction = character(), correlation = numeric(), p_value = numeric(), diff_corr = numeric(), stringsAsFactors = FALSE)
+
+# Calcolo delle correlazioni e p-value per ogni frazione
+for (fraction in names(correlation_data)) {
+  data <- correlation_data[[fraction]]
+  
+  # Calcolo della correlazione
+  r <- round(cor(data$similarity, data$tempo.medio.anni), 2)
+  
+  # Calcolo del p-value
+  p <- cor.test(data$similarity, data$tempo.medio.anni)$p.value
+  
+  # Aggiunta delle informazioni al dataframe
+  df <- rbind(df, data.frame(fraction = fraction, correlation = r, p_value = p, length=nrow(data)))
+}
+
+# Visualizzazione del dataframe
+df
+diff_df <- data.frame(fraction1 = character(), fraction2 = character(), diff_corr = numeric(), stringsAsFactors = FALSE)
+
+# Calcolo delle differenze in correlazione per ogni combinazione di frazioni
+for (i in 1:(nrow(df) - 1)) {
+  for (j in (i + 1):nrow(df)) {
+    fraction1 <- df$fraction[i]
+    fraction2 <- df$fraction[j]
+    correlation1 <- df$correlation[i]
+    correlation2 <- df$correlation[j]
+    length1 <- df$length[i]
+    length2 <- df$length[j]
+    
+    # Calcolo della differenza in correlazione
+    diff_corr <- diffcor.two(correlation1, correlation2, length1, length2, digit = 3)
+    
+    # Aggiunta delle informazioni al dataframe delle differenze in correlazione
+    diff_df <- rbind(diff_df, data.frame(fraction1 = fraction1, fraction2 = fraction2, diff_corr))
+  }
+}
+
+# Visualizzazione del dataframe delle differenze in correlazione
+diff_df
+
+
+#########################################################
+###############correlazioni simi e km 
+#######################################################
+
+
+
+import pandas as pd
+import searoute as sr
+
+# Leggi il file CSV
+df = pd.read_csv('data.csv')
+
+# Lista per memorizzare le distanze calcolate
+distances = []
+
+# Calcola la distanza tra le coppie di stazioni
+for index, row in df.iterrows():
+    origin = [row['Longitude_start'], row['Latitude_start']]
+    destination = [row['Longitude_end'], row['Latitude_end']]
+    try:
+        route = sr.searoute(origin, destination)
+        distance_km = route['properties']['length']
+    except Exception as e:
+        print(f"Errore nel calcolo della distanza per la riga {index}: {e}")
+        distance_km = None
+    distances.append(distance_km)
+
+# Aggiungi la colonna con le distanze calcolate
+df['searoutekm'] = distances
+
+# Salva il risultato in un nuovo file CSV
+df.to_csv('data_with_distances.csv', index=False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#########################################################
+###############correlazioni comparison log e zscore
+#######################################################
+
+# Funzione per calcolare lo Z-score
+zscore <- function(x) {
+  return((x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))
+}
+
+# Lettura e filtro dei dati di correlazione per distanza e anni
+correlation_data_combined <- data.frame()
+
+for (file_path in file_paths) {
+  cc <- read.csv(file_path, sep = ",")
+  name <- gsub("cytoscape/file_conx/|_TimTrav.csv", "", file_path)
+  cc$fraction <- rep(name, length(cc$conx))
+  merged_data <- merge(cc, newDF, by = "conx", all.x = TRUE)
+  merged_data <- merged_data[merged_data$dist_km <= 5000 & merged_data$tempo.medio.anni < 1.5,]
+  merged_data$log_dist_km <- log1p(merged_data$dist_km)
+  merged_data$log_tempo_anni <- log1p(merged_data$tempo.medio.anni)
+  merged_data$z_log_dist_km <- zscore(merged_data$log_dist_km)
+  merged_data$z_log_tempo_anni <- zscore(merged_data$log_tempo_anni)
+  merged_data_long <- melt(merged_data, id.vars = c("conx", "similarity", "fraction"), measure.vars = c("z_log_dist_km", "z_log_tempo_anni"), variable.name = "type", value.name = "z_log_value")
+  correlation_data_combined <- rbind(correlation_data_combined, merged_data_long)
+}
+
+# Creazione del plot combinato
+plot <- ggplot(correlation_data_combined, aes(x = z_log_value, y = similarity, color = fraction, linetype = type)) +
+  geom_smooth(method = "lm") +
+  stat_cor(aes(label = paste(..r.label.., sep = "")), method = "pearson", geom = "text", position = position_jitter(width = 0.2, height = 0), show.legend = FALSE) +
+  scale_linetype_manual(values = c("z_log_dist_km" = "dashed", "z_log_tempo_anni" = "solid"), labels = c("z_log_dist_km" = "Distance (z_log_km)", "z_log_tempo_anni" = "Time (z_log_years)")) +
+  scale_color_manual(values = color_palette, guide = guide_legend(order = 1)) +
+  labs(x = "Z-score Log-transformed Scale (z_log_km and z_log_years)", y = "Similarity") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(vjust = -0.5),
+    legend.position = "top"
+  )
 
 
 
@@ -712,7 +1021,185 @@ salmon quant --meta -l A --index $i  \
 -o quantification/${prefix}
 done
 
+#fig 4 A and B
+library(phyloseq)
+library(vegan)
+library(ggplot2)
+library(readr)
+library(plyr)
+library(dplyr)
+library(hrbrthemes)
+library(ggpubr)
+library(viridis)
+library(ggforce)
+library(concaveman)
+library(dplyr)
+library(microbiomeMarker)
+library("MiscMetabar")
+
+abund_table<-read.csv("salmon/vibrio_tpm_frequency_table.csv",row.names=1, check.names=FALSE,sep = ",")
+dfTAX<-read.csv("salmon/TAX_vibrio_tpm_frequency_table.csv",row.names=1, check.names=FALSE,sep = ",")
+metaDF<-read.csv("salmon/metaTable_contigs.csv",row.names=1, check.names=FALSE,sep = ",")
+ 
 
 
 
+physeq<-merge_phyloseq(phyloseq(otu_table(as.matrix(abund_table), taxa_are_rows = T), tax_table(as.matrix(dfTAX)), sample_data(metaDF)))
+genus.sum = tapply(taxa_sums(physeq), tax_table(physeq)[, "specie"], sum, na.rm=TRUE)
 
+top5phyla = names(sort(genus.sum, TRUE))[1:20]
+physeq25 = prune_taxa((tax_table(physeq)[, "specie"] %in% top5phyla), physeq)
+
+physeq_norm<-normalize(physeq25, method = "RLE")
+# Define your phyloseq object
+physeq <- physeq_norm   # replace with your phyloseq object
+# Define your phyloseq object
+
+# Ensure physeq is of class phyloseq
+if (!inherits(physeq, "phyloseq")) {
+  stop("physeq must be an object of class 'phyloseq'")
+}
+
+# Transpose OTU table if necessary
+if (!physeq@otu_table@taxa_are_rows) {
+  otu_tab <- t(physeq@otu_table)
+} else {
+  otu_tab <- physeq@otu_table
+}
+
+otu_tab <- as.data.frame(as(otu_tab, "matrix"))
+
+# Summarize OTU table by taxa
+tax_table <- as.data.frame(as(physeq@tax_table, "matrix"))
+tax_table$Taxon <- rownames(tax_table)
+
+# Merge OTU table with taxonomy table
+otu_taxa <- merge(otu_tab, tax_table, by = "row.names")
+rownames(otu_taxa) <- otu_taxa$Row.names
+otu_taxa$Row.names <- NULL
+
+# Specify the taxa level to use (e.g., "species")
+taxa <- "species"  # replace with the desired taxonomic level, if different
+
+# Summarize OTU counts by specified taxa rank and compartment (BACT or PROT)
+taxa_counts <- otu_taxa %>%
+  dplyr::group_by(across(all_of("species"))) %>%
+  dplyr::summarise(across(starts_with("BACT_") | starts_with("PROT_"), sum)) %>%
+  pivot_longer(cols = starts_with("BACT_") | starts_with("PROT_"),
+               names_to = "Sample", values_to = "Abundance") %>%
+  dplyr::mutate(Compartment = ifelse(grepl("^BACT_", Sample), "BACT", "PROT"))
+
+ 
+taxa_counts <- taxa_counts %>%
+  group_by(!!sym(taxa)) %>%
+  mutate(Total = sum(Abundance)) %>%
+  ungroup() %>%
+  mutate(Normalized_Abundance = Abundance / Total)
+
+
+
+taxa_order <- taxa_counts %>%
+  filter(Compartment == "PROT") %>%
+  arrange(desc(Normalized_Abundance)) %>%
+  distinct(!!sym(taxa)) %>%
+  pull(!!sym(taxa))
+
+# Convert taxa to a factor with levels ordered by PROT abundance
+taxa_counts <- taxa_counts %>%
+  mutate(!!sym(taxa) := factor(!!sym(taxa), levels = unique(taxa_order)))
+
+ggplot(taxa_counts, aes(x = !!sym(taxa), y = Normalized_Abundance, fill = Compartment)) +
+  geom_bar(stat = "identity", position = "stack") +
+  coord_flip() +  # Make the bar plot horizontal
+  labs(title = "Normalized Abundance of Taxa in BACT and PROT Compartments",
+       x = "Taxa",
+       y = "Normalized Abundance") +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+
+ggplot(taxa_counts, aes(x = !!sym(taxa), y = Normalized_Abundance, fill = Oceano   )) +
+  geom_bar(stat = "identity", position = "stack") +
+  coord_flip() +  # Make the bar plot horizontal
+  labs(title = "Normalized Abundance of Taxa in BACT and PROT Compartments by Ocean",
+       x = "Taxa",
+       y = "Normalized Abundance") +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+
+### distribution oceanic regions
+
+
+
+# Ensure physeq is of class phyloseq
+if (!inherits(physeq, "phyloseq")) {
+  stop("physeq must be an object of class 'phyloseq'")
+}
+
+# Transpose OTU table if necessary
+if (!physeq@otu_table@taxa_are_rows) {
+  otu_tab <- t(physeq@otu_table)
+} else {
+  otu_tab <- physeq@otu_table
+}
+
+otu_tab <- as.data.frame(as(otu_tab, "matrix"))
+
+# Summarize OTU table by taxa
+tax_table <- as.data.frame(as(physeq@tax_table, "matrix"))
+tax_table$Taxon <- rownames(tax_table)
+
+# Merge OTU table with taxonomy table
+otu_taxa <- merge(otu_tab, tax_table, by = "row.names")
+rownames(otu_taxa) <- otu_taxa$Row.names
+otu_taxa$Row.names <- NULL
+
+# Specify the taxa level to use (e.g., "species")
+taxa <- "species"  # replace with the desired taxonomic level, if different
+
+# Add metadata information
+metaDF <- data.frame(
+  'Campione' = c(
+    "BACT_ANE", "BACT_ARC", "BACT_ANW", "BACT_ASE", "BACT_ASW",
+    "BACT_ION", "BACT_IOS", "BACT_MED", "BACT_PON", "BACT_PSE",
+    "BACT_PSW", "BACT_RED", "BACT_SOC", "PROT_ANE", "PROT_ANW",
+    "PROT_ARC", "PROT_ASE", "PROT_ASW", "PROT_ION", "PROT_IOS",
+    "PROT_MED", "PROT_PON", "PROT_PSE", "PROT_PSW", "PROT_RED",
+    "PROT_SOC"
+  ),
+  'Fraction' = c(
+    rep("Bacteria", 13),
+    rep("Protist", 13)
+  ),
+  'Oceano' = c(
+    rep(c("Atlantic", "Polar", "Atlantic", "Atlantic", "Atlantic",
+          "Indian", "Indian", "Seas", "Pacific", "Pacific",
+          "Pacific", "Seas", "Polar"), 2)
+  )
+)
+
+# Merge with taxa_counts
+taxa_counts <- otu_taxa %>%
+  group_by(across(all_of(taxa))) %>%
+  summarise(across(starts_with("BACT_") | starts_with("PROT_"), sum)) %>%
+  pivot_longer(cols = starts_with("BACT_") | starts_with("PROT_"),
+               names_to = "Sample", values_to = "Abundance") %>%
+  mutate(Compartment = ifelse(grepl("^BACT_", Sample), "BACT", "PROT")) %>%
+  left_join(metaDF, by = c("Sample" = "Campione"))
+
+# Normalize values so that each taxon has the same total abundance
+taxa_counts <- taxa_counts %>%
+  group_by(!!sym(taxa)) %>%
+  mutate(Total = sum(Abundance)) %>%
+  ungroup() %>%
+  mutate(Normalized_Abundance = Abundance / Total)
+
+ggplot(taxa_counts, aes(x = !!sym(taxa), y = Normalized_Abundance, fill = Oceano   )) +
+  geom_bar(stat = "identity", position = "stack") +
+  coord_flip() +  # Make the bar plot horizontal
+  labs(title = "Normalized Abundance of Taxa in BACT and PROT Compartments by Ocean",
+       x = "Taxa",
+       y = "Normalized Abundance") +
+  theme_minimal() +
+  theme(legend.position = "right")
