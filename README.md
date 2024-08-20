@@ -1210,6 +1210,132 @@ plot <- ggplot(correlation_data_combined, aes(x = z_log_value, y = similarity, c
     legend.position = "top"
   )
 
+#########################################################
+###############  number edges and similarity Fig3G
+#######################################################
+library(dplyr)
+library(reshape2)
+library(geosphere)
+
+process_file <- function(file_path, time_travel_file, coordinates_file, matrix_name) {
+  # Caricare la matrice dal file CSV
+  mat <- as.matrix(read.table(file_path, sep=";", header=TRUE, row.names=1))
+  
+  # Convertire la matrice in un dataframe in formato lungo
+  df <- melt(mat)
+  
+  # Rimuovere le righe dove Var1 è uguale a Var2
+  new_df <- df[!df$Var1 == df$Var2,]
+  
+  # Calcolare la similarità
+  new_df$similarity <- 1 - new_df$value
+  new_df$conx <- paste(new_df$Var1, new_df$Var2, sep = "_")
+  
+  # Caricare il file del time travel
+  B <- read.csv2(time_travel_file, sep = " ", header = FALSE)
+  colnames(B) <- c("Stazione.partenza", "Stazione.arrivo", "tempo.medio.giorni", "devStand.giorni")
+  
+  B <- B[as.numeric(B$tempo.medio.giorni) >= 0, ]
+  B <- B[B$Stazione.partenza != B$Stazione.arrivo, ]
+  B$tempo.medio.anni <- as.numeric(B$tempo.medio.giorni) / 365
+  B$conx <- paste(B$Stazione.partenza, B$Stazione.arrivo, sep = "_")
+  
+  # Unire i dataframe
+  C <- merge(new_df, B, by = "conx")
+  
+  # Filtrare il network per tempo.medio.anni <= 1.5
+  my_network <- C[C$tempo.medio.anni <= 1.5,]
+  
+  # Caricare le coordinate
+  coordinates <- read.csv(coordinates_file, sep = ";")
+  
+  # Filtrare le coordinate per i nodi nel network
+  points_list <- coordinates[coordinates$Sample %in% my_network$Var1,]
+  
+  # Calcolare la distanza tra i punti
+  dist_matrix <- distm(points_list[, c("Longitude", "Latitude")], fun = distVincentyEllipsoid)
+  
+  # Trovare la distanza minima per ogni coppia di punti
+  min_dist <- apply(dist_matrix, 2, function(x) {
+    dists <- sort(x)
+    dists[2] # La seconda distanza più piccola è la distanza dal punto più vicino
+  })
+  
+  # Creare un dataframe con le connessioni e le distanze
+  edges_df <- data.frame(
+    from = rep(points_list$Sample, each = nrow(points_list)),
+    to = rep(points_list$Sample, times = nrow(points_list)),
+    distance = min_dist
+  )
+  
+  # Rimuovere le connessioni che collegano un punto a se stesso
+  edges_df <- edges_df[edges_df$from != edges_df$to, ]
+  
+  # Unire edges_df con il network originale
+  df2 <- merge(edges_df, my_network, by.x = c("from", "to"), by.y = c("Var1", "Var2"))
+  
+  # Filtrare le similarità maggiori di 0
+  df1 <- df2[df2$similarity > 0,]
+  
+  # Calcolare i ranghi
+  n <- 4
+  breaks <- seq(0, 1, by = 1/n)
+  breaks1 <- seq(0, 1.5, by = 0.5)
+  df1$simi_ranges <- cut(as.numeric(df1$similarity), breaks = breaks, labels = FALSE)
+  df1$anni_ranges <- cut(as.numeric(df1$tempo.medio.anni), breaks = breaks1, labels = FALSE)
+   
+  # Aggiungere una colonna per identificare la matrice
+  df1$matrix_name <- matrix_name
+  df3<-table(df1$simi_ranges)
+  df3$name<-gsub("_mat_abundance_braycurtis.csv", "", file_path)
+  # Restituire il dataframe risultante
+  return(df3)
+}
+
+# Definire i percorsi dei file e i nomi delle matrici
+files <- c("SRF_0.22-3_mat_abundance_braycurtis.csv", 
+           "SRF_3-2_mat_abundance_braycurtis.csv", 
+           "SRF_20-180_mat_abundance_braycurtis.csv", 
+           "SRF_180_2000_mat_abundance_braycurtis.csv")
+matrix_names <- c("SRF_0.22-3", "SRF_3-2", "SRF_20-180", "SRF_180-2000")
+time_travel_file <- "filetime_2023-09-29_17-02-30_tiempo_stdtiempo.txt"
+coordinates_file <- "cytoscape_samples_coordinates.csv"
+
+# Applicare la funzione a ciascun file e combinare i risultati in un unico dataframe
+final_results <- do.call(rbind, lapply(1:length(files), function(i) {
+  process_file(files[i], time_travel_file, coordinates_file, matrix_names[i])
+}))
+
+# Visualizzare il risultato finale
+print(final_results)
+
+library(ggplot2)
+
+# Trasformare il risultato finale in un formato lungo
+final_df <- as.data.frame(final_results)
+ 
+colnames(final_df) <- c("V1", "V2", "V3", "V4", "Size")
+final_df$V1 <- as.numeric(final_df$V1)
+final_df$V2 <- as.numeric(final_df$V2)
+final_df$V3 <- as.numeric(final_df$V3)
+final_df$V4 <- as.numeric(final_df$V4)
+# Convertire in formato lungo per ggplot
+final_df_long <- melt(final_df, id.vars = "Size", variable.name = "Ranges", value.name = "Numero")
+
+# Riorganizzare i fattori come nell'esempio
+newSTorder = c("SRF_0.22-3", "SRF_3-2", "SRF_20-180", "SRF_180_2000")
+final_df_long$Size <- factor(final_df_long$Size, levels = newSTorder)
+
+newSTorder1 <- c("V4", "V3", "V2", "V1")
+final_df_long$Ranges <- factor(final_df_long$Ranges, levels = newSTorder1)
+
+# Creare il grafico
+ggplot(final_df_long, aes(x = Size, y = Numero, fill = Ranges)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("V1" = "green", "V2" = "yellow", "V3" = "darkorange", "V4" = "darkred")) +
+  theme_bw() +
+  labs(x = "Size", y = "Numero", fill = "Ranges")
+
 
 
 
