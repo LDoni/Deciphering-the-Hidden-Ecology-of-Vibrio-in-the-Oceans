@@ -1038,12 +1038,6 @@ library(diffcor)
 
 
 
-
-
-
-
-#####################  preparazione dei dati
-
 coordinate<-read.csv2("cytoscape_samples_coordinates.csv",sep = ";")
 head(coordinate)
 
@@ -1177,16 +1171,6 @@ correlation_data_SR <- lapply(correlation_data, merge_and_filter, conx_w_coord)
 
 
 
-
-
-
-
-
-
-
-
-
-
 #########################################################
 ###############correlazioni comparison log e zscore
 #######################################################
@@ -1225,6 +1209,309 @@ plot <- ggplot(correlation_data_combined, aes(x = z_log_value, y = similarity, c
     axis.title.x = element_text(vjust = -0.5),
     legend.position = "top"
   )
+
+
+
+
+#########################################################
+###############  NODE centrality Fig3F 
+#######################################################
+library(igraph)
+library(dplyr)
+library(reshape2)
+library(ggpubr)
+calcola_node_centrality <- function(file_list, file_time, file_coordinates) {
+  risultati_lista <- list()
+  
+  for (file_abundance in file_list) {
+    # Caricamento dei dati
+    mat <- as.matrix(read.table(file_abundance, sep = ";", header = TRUE, row.names = 1))
+    df <- melt(mat)
+    new_df <- df[!df$Var1 == df$Var2, ]
+    new_df$similarity <- 1 - new_df$value
+    new_df$conx <- paste(new_df$Var1, new_df$Var2, sep = "_")
+    
+    B <- read.csv2(file_time)
+    C <- merge(new_df, B, "conx")
+    my_network <- C[C$tempo.medio.anni < 1.5, ]
+    
+    coordinates <- read.csv(file_coordinates, sep = ";")
+    points_list <- coordinates[coordinates$Sample %in% my_network$Var1, ]
+    
+    dist_matrix <- distm(points_list[, c("Longitude", "Latitude")], fun = distVincentyEllipsoid)
+    min_dist <- apply(dist_matrix, 2, function(x) {
+      dists <- sort(x)
+      dists[2]
+    })
+    
+    edges_df <- data.frame(
+      from = rep(points_list$Sample, each = nrow(points_list)),
+      to = rep(points_list$Sample, times = nrow(points_list)),
+      distance = min_dist
+    )
+    edges_df <- edges_df[edges_df$from != edges_df$to, ]
+    edges_df <- merge(edges_df, points_list, by.x = "from", by.y = "Sample")
+    edges_df <- merge(edges_df, points_list, by.x = "to", by.y = "Sample", suffixes = c("", "_to"))
+    
+    df2 <- merge(x = edges_df, y = my_network, by.x = c("from", "to"), by.y = c("Var1", "Var2"))
+    df1 <- filter(df2, similarity > 0)
+    edges <- df1[, c("from", "to", "similarity")]
+    
+    # Creazione del grafo
+    g <- graph.data.frame(edges, directed = TRUE)
+    
+    # Calcolo della centralità di grado (node centrality)
+    centr <- centr_degree(g)$res
+    
+    # Creazione del dataframe con i risultati della centralità di grado
+    risultati <- data.frame(
+      nodo = V(g)$name,
+      node_centrality = centr
+    )
+    
+    # Ordinamento dei risultati per la centralità di grado
+    risultati <- risultati[order(-centr), ]
+    
+    # Aggiunta del dataframe dei risultati alla lista
+    risultati_lista[[file_abundance]] <- risultati
+  }
+  
+  return(risultati_lista)
+}
+
+# Utilizzo della funzione con i file CSV specificati
+file_list <- c(
+  "SRF_0.22-3_mat_abundance_braycurtis.csv",
+  "SRF_180_2000_mat_abundance_braycurtis.csv",
+  "SRF_20-180_mat_abundance_braycurtis.csv",
+  "SRF_3-2_mat_abundance_braycurtis.csv"
+)
+file_time <- "file_time1_senza_identici.csv"
+file_coordinates <- "cytoscape_samples_coordinates.csv"
+
+risultati_centralita <- calcola_node_centrality(file_list, file_time, file_coordinates)
+
+# Accesso ai risultati per ogni file
+risultati_file_1 <- risultati_centralita[["SRF_0.22-3_mat_abundance_braycurtis.csv"]]
+risultati_file_2 <- risultati_centralita[["SRF_180_2000_mat_abundance_braycurtis.csv"]]
+risultati_file_3 <- risultati_centralita[["SRF_20-180_mat_abundance_braycurtis.csv"]]
+risultati_file_4 <- risultati_centralita[["SRF_3-2_mat_abundance_braycurtis.csv"]]
+
+# Creazione del dataframe finale
+df_completo <- data.frame()
+
+# Iterazione attraverso i dataframe di risultati
+for (nome_file in names(risultati_centralita)) {
+  risultati <- risultati_centralita[[nome_file]]
+  
+  # Aggiunta del nome del file come colonna
+  risultati$nome_file <- gsub("_mat_abundance_braycurtis.csv", "", nome_file)
+  
+  # Aggregazione dei risultati al dataframe finale
+  df_completo <- bind_rows(df_completo, risultati)
+}
+
+# Visualizzazione del dataframe completo
+print(df_completo)
+
+ggplot(df_completo, aes(x=nome_file, y=node_centrality, fill=nome_file)) + 
+  geom_boxplot(alpha=0.3,outlier.shape = NA) +
+  scale_fill_brewer(palette="Dark2")+
+  geom_boxplot() + stat_compare_means(comparisons = my_comparisons)+   stat_compare_means(label.y = 70)  
+
+
+
+
+df_completo$zona<-sub("_.*", "", df_completo$nodo)
+
+
+
+## fig S 5A
+ggplot(data = df_completo, aes(x = zona, y = node_centrality)) +
+  geom_boxplot(outlier.shape = NA) +  # Creazione del box plot senza mostrare gli outlier
+  geom_jitter(aes(color = nome_file), position = position_jitter(0.2), alpha = 0.7) +  # Aggiunta dei punti con jitter, colorati per frazione
+  labs(x = "Zona", y = "node_centrality") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  geom_hline(yintercept = media_node_centrality, linetype = "dashed", color = "red")
+
+
+## fig S 5B
+
+  top_stazioni <- df_completo %>% 
+     arrange(desc(node_centrality))
+   
+   # Calcolare il totale di node_centrality per ogni stazione
+   totali_stazioni <- top_stazioni %>%
+     group_by(nodo) %>%
+     summarise(total_node_centrality = sum(node_centrality))
+   
+   # Riordinare i fattori dell'asse X in base al totale di node_centrality e invertire l'ordine
+   top_stazioni <- top_stazioni %>%
+     mutate(nodo = factor(nodo, levels = rev(totali_stazioni$nodo[order(-totali_stazioni$total_node_centrality)])))
+   top_30_nodi <- top_stazioni %>%
+     arrange(desc(node_centrality)) %>%  # Ordina in base a node_centrality (in ordine decrescente)
+     distinct(nodo, .keep_all = TRUE) %>% # Rimuove i duplicati basati sulla colonna "nodo"
+     slice(1:30) %>%  # Seleziona i primi 30 nodi unici
+     pull(nodo)  # Estrae solo i nomi dei nodi
+   
+   # Passo 2: Filtrare il dataframe `top_stazioni` per includere solo i top 30 nodi univoci
+   top_stazioni_filtrato <- top_stazioni %>%
+     filter(nodo %in% top_30_nodi)
+   
+   # Visualizzazione del risultato
+   print(top_stazioni_filtrato)
+   
+   ggplot(data = top_stazioni_filtrato, aes(x = nodo, y = node_centrality, fill = nome_file)) +
+     geom_bar(stat = "identity") +
+     coord_flip() +
+     labs(x = "Stazione", y = "node_centrality", title = "Top 150 stazioni più rilevanti") +
+     theme_minimal()
+   
+
+
+
+
+
+
+
+#########################################################
+###############   Heatmap per mean travel time and similarity for 20-180 fig Fig S6
+#######################################################
+
+ # Load necessary libraries
+ library(ggplot2)
+ library(maps)
+ library(reshape2)
+ library(dplyr)
+ library(geosphere)
+ 
+ # Load matrix
+ mat <- as.matrix(read.table("SRF_20-180_mat_abundance_braycurtis.csv", sep=";", header=TRUE, row.names=1))
+ df <- melt(mat)
+ 
+ # Remove self-connections
+ new_df <- df[df$Var1 != df$Var2,]
+ new_df$similarity <- 1 - new_df$value
+ new_df$conx <- paste(new_df$Var1, new_df$Var2, sep="_")
+ 
+ # Merge with travel time data
+ B <- read.csv2("filetime_2023-09-29_17-02-30_tiempo_stdtiempo.txt",sep = " ", header = F)
+ head(B)
+ colnames(B)<-c("Stazione.partenza"  ,"Stazione.arrivo","tempo.medio.giorni" ,"devStand.giorni")
+ 
+ B <- B[as.numeric(B$tempo.medio.giorni) >= 0, ]
+ B <- B[B$Stazione.partenza != B$Stazione.arrivo, ]
+ B$tempo.medio.anni <-  as.numeric(B$tempo.medio.giorni) / 365
+ B$conx <- paste(B$Stazione.partenza, B$Stazione.arrivo, sep = "_")
+ head(B)
+ 
+ C <- merge(new_df, B, by="conx")
+ 
+ # Filter network data
+ my_network <- C[C$tempo.medio.anni <= 1.5,]
+ 
+ # Load coordinates
+ coordinates <- read.csv("cytoscape_samples_coordinates.csv", sep=";")
+ 
+ # Calculate distance matrix
+ points_list <- coordinates[coordinates$Sample %in% my_network$Var1,]
+ dist_matrix <- distm(points_list[, c("Longitude", "Latitude")], fun = distVincentyEllipsoid)
+ min_dist <- apply(dist_matrix, 2, function(x) sort(x)[2])
+ 
+ # Create edges data frame
+ edges_df <- data.frame(
+   from = rep(points_list$Sample, each = nrow(points_list)),
+   to = rep(points_list$Sample, times = nrow(points_list)),
+   distance = min_dist
+ )
+ edges_df <- edges_df[edges_df$from != edges_df$to,]
+ edges_df <- merge(edges_df, points_list, by.x="from", by.y="Sample")
+ edges_df <- merge(edges_df, points_list, by.x="to", by.y="Sample", suffixes=c("", "_to"))
+ 
+ # Merge edges with network data
+ df2 <- merge(edges_df, my_network, by.x=c("from", "to"), by.y=c("Var1", "Var2"))
+ df1 <- filter(df2, similarity > 0)
+ 
+ # Classify ocean regions
+ classify_ocean_region <- function(station) {
+   if (grepl("^ANE", station)) {
+     return("North Atlantic East")
+   } else if (grepl("^ANW", station)) {
+     return("North Atlantic West")
+   } else if (grepl("^ASE", station)) {
+     return("South Atlantic East")
+   } else if (grepl("^ASW", station)) {
+     return("South Atlantic West")
+   } else if (grepl("^PON", station)) {
+     return("North Pacific")
+   } else if (grepl("^PSW", station)) {
+     return("South Pacific West")
+   } else if (grepl("^PSE", station)) {
+     return("South Pacific East")
+   } else if (grepl("^ION", station)) {
+     return("North Indian")
+   } else if (grepl("^IOS", station)) {
+     return("South Indian")
+   } else if (grepl("^SOC", station)) {
+     return("Southern Ocean")
+   } else if (grepl("^ARC", station)) {
+     return("Arctic")
+   } else if (grepl("^MED", station)) {
+     return("Mediterranean")
+   } else if (grepl("^RED", station)) {
+     return("Red Sea")
+   } else {
+     return(NA)
+   }
+ }
+ 
+ 
+ df1$Ocean_reg <- sapply(df1$from, classify_ocean_region)
+ df1$Ocean_reg_to <- sapply(df1$to, classify_ocean_region)
+ 
+ combined_links <- df1 %>%
+    group_by(Ocean_reg, Ocean_reg_to) %>%
+   summarise(
+     count = n(),
+     mean_travel_time = mean(as.numeric(tempo.medio.anni), na.rm = TRUE),
+     mean_similarity = mean(similarity, na.rm = TRUE),
+     .groups = 'drop'
+   )
+# Heatmap per mean travel time
+ ggplot(combined_links, aes(x = Ocean_reg, y = Ocean_reg_to, fill = mean_travel_time)) +
+   geom_tile() +
+   geom_text(aes(label = round(mean_travel_time, 2)), color = "white", size = 3) +
+   scale_fill_gradient(low = "red", high = "blue") +
+   labs(title = "Mean Travel Time Between and Within Ocean Regions 20-180",
+        x = "Start Ocean Region",
+        y = "Arrival Ocean Region",
+        fill = "Mean Travel Time") +
+   theme_minimal() +
+   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ 
+ 
+ # Heatmap per mean_similarity
+ ggplot(combined_links, aes(x = Ocean_reg, y = Ocean_reg_to, fill = mean_similarity)) +
+   geom_tile() +
+   geom_text(aes(label = round(mean_similarity, 2)), color = "white", size = 3) +
+   scale_fill_gradientn(colors = c("blue",  "red")) +
+   labs(title = "Mean Similarity Between and Within Ocean Regions 20-180",
+        x = "Start Ocean Region",
+        y = "Arrival Ocean Region",
+        fill = "Mean Similarity") +
+   theme_minimal() +
+   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+
+
+
 
 
 
