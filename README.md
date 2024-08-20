@@ -638,6 +638,161 @@ simka -in imput_simka.txt -out results -kmer-size 31  -max-merge 4 -max-reads 0 
 simka -in input_sinka_derep_SRF.txt -out simka_SRF -kmer-size 31 -max-reads 0 -min-shannon-index 1.5
 
 
+
+#####
+####   BIOREGIONS
+####
+library(scales)
+
+file_paths <- c(
+  "SRF_0.22-3_mat_abundance_braycurtis.csv",
+  "SRF_3-2_mat_abundance_braycurtis.csv",
+  "SRF_20-180_mat_abundance_braycurtis.csv",
+  "SRF_180_2000_mat_abundance_braycurtis.csv"
+)
+
+# Lettura dei file CSV in matrici
+matrices <- lapply(file_paths, read.csv, row.names = 1, sep = ";")
+matrices
+
+
+
+
+
+
+# Esecuzione della PCoA
+pcoa_results <- lapply(matrices, function(matrix) {
+  dist_matrix <- as.dist(matrix) # Assicurati che sia una matrice di distanza
+  cmdscale(dist_matrix, eig = TRUE, k = 3, add = TRUE)  
+})
+
+# Nomi per i risultati PCoA
+names(pcoa_results) <- c("0.22-3", "3-20", "20-180", "180-2000")
+
+# Calcolo dei valori RGB per ogni set di risultati PCoA
+rgb_results <- lapply(pcoa_results, function(result) {
+  coordinates <- result$points[, 1:3] # Primi tre assi principali
+  eigenvalues <- result$eig[1:3] # Primi tre autovalori
+  
+  lambda_r <- 1 # Rapporto per il canale rosso
+  lambda_g <- eigenvalues[2] / eigenvalues[1] # Rapporto per il canale verde
+  lambda_b <- eigenvalues[3] / eigenvalues[1] # Rapporto per il canale blu
+  
+  # Conversione delle coordinate in valori RGB
+  convert_to_rgb <- function(coord, lambda) {
+    128 * (1 + lambda * coord / max(abs(coord)))
+  }
+  
+  r <- convert_to_rgb(coordinates[, 1], lambda_r)
+  g <- convert_to_rgb(coordinates[, 2], lambda_g)
+  b <- convert_to_rgb(coordinates[, 3], lambda_b)
+  
+  r <- pmin(pmax(r, 0), 255)
+  g <- pmin(pmax(g, 0), 255)
+  b <- pmin(pmax(b, 0), 255)
+  
+  rgb_values <- data.frame(r = round(r), g = round(g), b = round(b))
+  return(rgb_values)
+})
+
+# Lettura delle coordinate delle stazioni
+coordinate <- read.csv2("cytoscape_samples_coordinates.csv", sep = ";")
+
+# Loop per ciascuno dei set di dati
+for (set_name in names(rgb_results)) {
+  
+  # Unione dei risultati RGB con le coordinate
+  rgb_df <- data.frame(Sample = rownames(rgb_results[[set_name]]), rgb_results[[set_name]], stringsAsFactors = FALSE)
+  merged_data <- merge(coordinate, rgb_df, by = "Sample")
+  
+  # Assicurati che r, g, b siano numerici e non fattori o caratteri
+  merged_data$r <- as.numeric(as.character(merged_data$r))
+  merged_data$g <- as.numeric(as.character(merged_data$g))
+  merged_data$b <- as.numeric(as.character(merged_data$b))
+  
+  # Funzione per riscalare i valori in una gamma specifica (0-255)
+  rescale_to_255 <- function(x) {
+    (x - min(x)) / (max(x) - min(x)) * 255
+  }
+  
+  # Riscalare i valori RGB
+  normalize_rgb <- function(rgb_df) {
+    rgb_df$r <- rescale_to_255(rgb_df$r)
+    rgb_df$g <- rescale_to_255(rgb_df$g)
+    rgb_df$b <- rescale_to_255(rgb_df$b)
+    return(rgb_df)
+  }
+  
+  # Applicare la normalizzazione ai valori RGB
+  normalized_rgb_df <- normalize_rgb(rgb_df)
+  
+  # Unire i risultati normalizzati con le coordinate
+  merged_data <- merge(coordinate, normalized_rgb_df, by = "Sample")
+  
+  # Conversione dei valori RGB in colori esadecimali
+  merged_data$color <- apply(merged_data[, c("r", "g", "b")], 1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
+  
+  #FIG2A
+  ggplot() +
+    borders("world", colour = "gray50", fill = "gray50") + # Aggiunge i confini del mondo
+    geom_point(data = merged_data, aes(x = as.numeric(Longitude), y = as.numeric(Latitude), color = color), size = 3) +
+    scale_color_identity() + # Usa i colori come forniti
+    theme_minimal() +
+    labs(x = "Longitudine", y = "Latitudine") +
+    coord_fixed(1.3) + # Mantiene le proporzioni corrette
+    ggtitle(paste("Mappa per il set", set_name))
+  
+  # Visualizzazione del grafico PCoA con colori normalizzati
+  pcoa_coords <- as.data.frame(pcoa_results[[set_name]]$points[, 1:2])
+  colnames(pcoa_coords) <- c("PC1", "PC2")
+  
+  merged_data_pcoa_rgb <- cbind(pcoa_coords, normalized_rgb_df)
+  merged_data_pcoa_rgb$color <- apply(merged_data_pcoa_rgb[, c("r", "g", "b")], 1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
+  merged_data_pcoa_rgb$sample <- rownames(merged_data_pcoa_rgb)
+  
+  ggplot(merged_data_pcoa_rgb, aes(x = PC1, y = PC2, color = color)) +
+    geom_point() +
+    geom_text(aes(label = sample), vjust = -1, hjust = 0.5) +  
+    scale_color_identity() +
+    theme_minimal() +
+    labs(x = "PC1", y = "PC2") +
+    ggtitle(paste("PCoA per il set", set_name))
+
+  c <- nlcor(merged_data_pcoa_rgb$PC1, merged_data_pcoa_rgb$PC2)
+  
+  # Creazione di un data frame e aggiunta alla lista
+  df_new <- data.frame(Fraction = set_name, Value = c$cor.estimate)
+  df_list[[set_name]] <- df_new
+}
+
+
+df_combined <- bind_rows(df_list)
+## fig 2B
+# Creazione del grafico unico con tutti i range
+ggplot(df_combined, aes(x = Fraction, y = Value, fill = Fraction)) +
+  geom_point(aes(color = Fraction)) +
+  geom_line(aes(group = Fraction)) +
+  theme_minimal() +
+  labs(title = "NLCC across all fractions", x = "Fraction", y = "NLCC") +
+  scale_fill_brewer(palette = "Set3")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ##################################################
 ############# cumulative correlarions############# 
 ##################################################
@@ -868,12 +1023,120 @@ diff_df
 #######################################################
 
 
+library(raster)
+library(maptools)
+library(ggplot2)
+library(dplyr)
+library(sf)
+library(ggpubr)
+library(reshape2)
+library(geodist)
+library(ggplot2)
+library(ggpubr)
+library(diffcor)
+
+
+
+
+
+
+
+
+#####################  preparazione dei dati
+
+coordinate<-read.csv2("cytoscape_samples_coordinates.csv",sep = ";")
+head(coordinate)
+
+
+
+rm(list2)
+list2<-data.frame(coordinate$Longitude,coordinate$Latitude,coordinate$Sample)
+
+colnames(list2)
+colnames(list2)[1] ="longitude"
+colnames(list2)[2] ="latitude"
+colnames(list2)[3] ="name"
+
+distance_matrix <- geodist(list2, measure = 'geodesic' )/1000 #converting it to km
+
+#also, check for other measures in the description
+
+colnames(distance_matrix) <- list2$name
+rownames(distance_matrix) <- list2$name
+
+ 
+
+
+mat=as.matrix(distance_matrix)
+melted<-reshape2::melt(mat)
+
+newDF<-melted
+ 
+ 
+
+newDF$merged<-paste(newDF$Var1,newDF$Var2,sep = "_")
+colnames(newDF)[4] ="conx"
+colnames(newDF)[3] ="dist_km"
+head(newDF)
+
+
+
+
+
+# Leggi i dati delle correlazioni da diversi file CSV
+file_paths <- c(
+  "cytoscape/file_conx/SRF_0.22-3_TimTrav.csv",
+  "cytoscape/file_conx/SRF_5-20_TimTrav.csv",
+  "cytoscape/file_conx/SRF_20-180_TimTrav.csv",
+  "cytoscape/file_conx/SRF_180-2000_TimTrav.csv"
+)
+
+
+
+color_palette <- c("SRF_0.22-3" = "red", "SRF_5-20" = "blue", "SRF_20-180" = "green", "SRF_180-2000" = "purple")
+
+
+# Definizione dell'ordine dei livelli della variabile "fraction"
+fraction_levels <- c("SRF_0.22-3", "SRF_5-20", "SRF_20-180", "SRF_180-2000")
+
+
+
+
+correlation_data <- list()
+
+for (file_path in file_paths) {
+  cc <- read.csv(file_path, sep = ",")
+  name <- gsub("cytoscape/file_conx/|_TimTrav.csv", "", file_path)
+  cc$fraction <- rep(name, length(cc$conx))
+  merged_data <- merge(cc, newDF, by = "conx", all.x = TRUE)
+ # merged_data <- merged_data[merged_data$dist_km <= 5000,]
+  correlation_data[[name]] <- merged_data
+}
+
+
+
+# Caricare la libreria dplyr
+library(dplyr)
+
+# Unire tutti i data frame in un unico data frame
+all_data <- bind_rows(correlation_data)
+dim(all_data)
+# Selezionare solo le righe con 'conx' unici
+unique_data <- all_data %>% distinct(conx, .keep_all = TRUE)
+dim(unique_data)
+head(unique_data)
+
+ 
+unique_data<-unique_data[, !(names(unique_data) %in% c("X1", "X", "Var1.x" , "Var2.x","Var1.y"  ,"Var2.y"))]
+
+# Salvare il data frame come CSV
+write.csv(unique_data, "unique_conx_data.csv", row.names = FALSE)
 
 import pandas as pd
 import searoute as sr
 
 # Leggi il file CSV
-df = pd.read_csv('data.csv')
+df = pd.read_csv('unique_conx_data.csv')
 
 # Lista per memorizzare le distanze calcolate
 distances = []
@@ -894,7 +1157,22 @@ for index, row in df.iterrows():
 df['searoutekm'] = distances
 
 # Salva il risultato in un nuovo file CSV
-df.to_csv('data_with_distances.csv', index=False)
+df.to_csv('unique_conx_data_with_distances.csv', index=False)
+
+
+### script fatto basandosi su searoutes nella cartella  km_onlywaters
+
+conx_w_coord<-read.csv("km_onlywaters/unique_conx_data_with_distances.csv")
+
+# Definisci una funzione per fare il merge per ogni data frame nella lista
+merge_and_filter <- function(df, conx_w_coord) {
+  df <- merge(df, conx_w_coord[, c("conx", "searoutekm")], by = "conx", all.x = TRUE)
+  df <- df %>% filter(searoutekm <= 5000)
+  return(df)
+}
+
+# Applica la funzione a ogni data frame nella lista e salva il risultato in correlation_data_SR
+correlation_data_SR <- lapply(correlation_data, merge_and_filter, conx_w_coord)
 
 
 
