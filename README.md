@@ -1,51 +1,55 @@
 # Deciphering-the-Hidden-Ecology-of-Vibrio-in-the-Oceans
 
-# Metagenomic READS Data Processing Pipeline
-
-This pipeline processes metagenomic data by performing the following steps: trimming reads, classifying them with Kraken2 using the RefSeq database, extracting Vibrio reads, classifying these reads with Enterobase, and finally refining the classifications using Bracken.
+This pipeline processes metagenomic TARA Ocean to analyze the Vibrio presence in the oceans
 
 ## Steps Overview
+### Metagenomic Reads Analysis
+1. **Trimming**
+2. **Kraken2 Classification with RefSeq**
+3. **Bracken Genus-Level Refinement (RefSeq)**  --> Fig 1A,1B
+4. **Extract Vibrio Reads (RefSeq)**
+5. **Kraken2 Classification with Enterobase**
+6. **Bracken Species-Level Refinement (Enterobase)** --> fig 1C, t-PCoA
+7. **Extract Vibrio Reads (Enterobase)**
+8. **Travel time simulation**
+9. **Simka kmers spectrum of Vibrio sequences** --> fig 1D (k-PCoA), 2A/B (Vibrio Bioregions), 3 B/C/D/E/F/G
 
-1. **Trimming**: Pre-process the raw reads to remove low-quality bases and adapters.
-2. **Kraken2 Classification with RefSeq**: Classify the trimmed reads at the genus level using the RefSeq database.
-3. **Bracken Genus-Level Refinement (RefSeq)**: Refine the genus-level classifications using Bracken.
-4. **Extract Vibrio Reads (RefSeq)**: Extract reads classified as Vibrio from the RefSeq output.
-5. **Kraken2 Classification with Enterobase**: Classify the extracted Vibrio reads at the species level using the Enterobase database.
-6. **Bracken Species-Level Refinement (Enterobase)**: Refine the species-level classifications using Bracken.
-7. **Extract Vibrio Reads (Enterobase)**: Extract Vibrio reads from the Enterobase output.
+### Contigs Analysis
+1. **Megahit Co-Assembling using Vibrio reads**
+2. **Species Taxonomy**
+3. **Salmon Quantification** --> fig 4A/B
+
 
 ## Script
 
-```bash
-
+```
 # Set the current path variable
 currpath=$(pwd)
 
 # Set the sample name file
-SAMPLE="samples_TARA.txt"
+SAMPLE="samples_TARA.txt" #list of downloaded metagenomes
 
 # RefSeq Kraken2 database directory
-REFSEQ_KRA_DB="/home/LAPO/krakenDB_bacteria_refseq"
+REFSEQ_KRA_DB="krakenDB_bacteria_refseq"
 
 # Enterobase Kraken2 database directory
-ENT_KRA_DB="/home/LAPO/Desktop/TARA/enterobase_vibrio_KRAKEN2_db"
+ENT_KRA_DB="enterobase_vibrio_KRAKEN2_db"
 
 # Output directories
 TRIM_OUT="${currpath}/trimming"
 REFSEQ_OUT="${TRIM_OUT}/kraken_refseq"
 ENT_OUT="${TRIM_OUT}/kraken_entero/entero_extraction"
 
-#######################
-# 1. Trimming of reads
-#######################
-
+``` 
+ 1. **Trimming**
+```
 cat $SAMPLE | parallel -j 10 'trim_galore \
 --cores 5 --paired {}_1.fastq.gz {}_2.fastq.gz \
 --trim-n --illumina --fastqc_args "-outdir ${TRIM_OUT}/quality_control" -o ${TRIM_OUT}'
 
-###############################################################
-# 2. Kraken2 classification with RefSeq database after trimming
-###############################################################
+```
+2. **Kraken2 Classification with RefSeq**
+```
 
 cat $SAMPLE | parallel -j 10 \
 "kraken2 --db ${REFSEQ_KRA_DB} \
@@ -55,11 +59,9 @@ cat $SAMPLE | parallel -j 10 \
 --gzip-compressed \
 --report ${REFSEQ_OUT}/{}_report-kraken_refseq.txt \
 --output ${REFSEQ_OUT}/{}_output_refseq.kraken"
-
-#########################################################
-# 3. Bracken genus-level refinement after Kraken2 (RefSeq)
-#########################################################
-
+```
+3. **Bracken Genus-Level Refinement (RefSeq)**  --> Fig 1A,1B
+```
 cat $SAMPLE | parallel -j 10 \
 "bracken -d ${REFSEQ_KRA_DB} \
 -i ${REFSEQ_OUT}/{}_report-kraken_refseq.txt \
@@ -67,13 +69,11 @@ cat $SAMPLE | parallel -j 10 \
 -l G"
 
 combine_bracken_outputs.py --files *.txt -o ../braken_all_REFSEQ_prokEprot_merged/braken_all_REFSEQ_prokEprot_merged.csv ```
+```
 
+### Figure 1A
 
-# FIG1 A
-
-
-
-
+```
 library(phyloseq)
 library(vegan)
 library(ggplot2)
@@ -84,48 +84,23 @@ library(dplyr)
 library(metagMisc)
 library(forcats)
 library(ggh4x)
-#####                      importing data                           ####
-
-
 
 abund_table<-read.csv("input/braken_all_REFSEQ_prokEprot_merged.csv",row.names=NULL, check.names=FALSE,sep = ";")
-
-## aggregare colonne ripetute facendo la media ( per dereplicare le repliche dei campioni)
-
 abund_table<-aggregate(.~Genus,abund_table,mean)
 abund_table<-t(abund_table)
-
-head(abund_table)
-ncol(abund_table)
-nrow(abund_table)
-#TAXONOMY table
 OTU_taxonomy<-read.csv("input/braken_all_REFSEQ_prokEprot_merged_fract_TAX.csv",row.names=1,check.names=FALSE,sep = ";")
-nrow(OTU_taxonomy)
-
-##  Metatable daereplicato su excel, filtro avanzato, non mostrare duplicati!
 meta_table<-read.csv("input/braken_all_REFSEQ_prokEprot_merged_fract_METAWcooRd.csv",row.names=1,check.names=FALSE,sep = ";")
-colnames(meta_table)
-nrow(meta_table)
-ncol(meta_table)
 
-
-
-
-#Convert the data to phyloseq format
 OTU = otu_table(as.matrix(abund_table), taxa_are_rows = T)
 TAX = tax_table(as.matrix(OTU_taxonomy))
 SAM = sample_data(meta_table)
 physeq<-merge_phyloseq(phyloseq(OTU, TAX, SAM))
 
-
-
 #Top 15 taxa
 
 genus.sum = tapply(taxa_sums(physeq), tax_table(physeq)[, "Genus"], sum, na.rm=TRUE)
-top5phyla = names(sort(genus.sum, TRUE))[1:15]
-GP1 = prune_taxa((tax_table(physeq)[, "Genus"] %in% top5phyla), physeq)
-
-
+top15phyla = names(sort(genus.sum, TRUE))[1:15]
+GP1 = prune_taxa((tax_table(physeq)[, "Genus"] %in% top15phyla), physeq)
 
 merge_samples_mean <- function(physeq, group){
   group_sums <- as.matrix(table(sample_data(physeq)[ ,group]))[,1]
@@ -154,12 +129,6 @@ data_glom$Sample<- as.character(data_glom$Sample)
 data_glom$Sample <- factor(data_glom$Sample, levels=newSTorder)
 
 
-
-
-
-
-
-
 ggplot(data_glom, aes(x = Sample, y = fct_reorder(Genus, NEG_TOT_ABUNDANCE), size=Abundance, fill=Ocean)) + 
   geom_point(alpha=0.5, shape=21, color="black") +
   scale_size_continuous(name = "Counts ", 
@@ -173,18 +142,14 @@ ggplot(data_glom, aes(x = Sample, y = fct_reorder(Genus, NEG_TOT_ABUNDANCE), siz
   scale_fill_viridis(discrete=TRUE, guide=FALSE, option="D")+ theme(axis.text=element_text(colour="black"))+
   scale_x_discrete(position = "top")+
    theme(text = element_text(size = 20))+scale_y_discrete(limits=rev)
+```
 
-
-###################################################################################### 
-### HEATMAPS FIG 1B
-############################################################################################################################# 
+### Figure 1B
+```
 VIBRIO <- subset_taxa(GP1, Genus=="Vibrio" )
-
-
-
-###################################################################################### 
-### fraction
-############################################################################################################################# 
+ ```
+####  Fraction
+ ```
 
 variable1 = as.character(get_variable(VIBRIO, "Zone"))
 variable2 = as.character(get_variable(VIBRIO, "Fraction3"))
@@ -192,16 +157,7 @@ variable2 = as.character(get_variable(VIBRIO, "Fraction3"))
 
 sample_data(VIBRIO)$NewPastedVar <- mapply(paste, variable1, variable2  
                                            , sep = "_")
-# sample_data(VIBRIO)
-
 physeq_MERGED_zone_FRACTIONS<-merge_samples_mean(VIBRIO, "NewPastedVar")
-
-sample_variables(physeq_MERGED_zone_FRACTIONS)
-sample_data(physeq_MERGED_zone_FRACTIONS)
-sample_names(physeq_MERGED_zone_FRACTIONS)
-
-
-#per far quello che facevo su excel
 rm(df)
 ttt<-nrow(as.data.frame(sample_names(physeq_MERGED_zone_FRACTIONS)))
 df <- data.frame(matrix(ncol = 1, nrow = ttt))
@@ -210,45 +166,25 @@ df$names<-(as.data.frame(sample_names(physeq_MERGED_zone_FRACTIONS)))
 df<-df[,2]
 colnames(df)[1] <- "Samples"
 
-foo <- data.frame(do.call('rbind', strsplit(as.character(df$Samples),'_',fixed=TRUE)))
-df$Zone <-foo$X1
-df$Size <-foo$X2
-colnames(df)
-
+foox <- data.frame(do.call('rbind', strsplit(as.character(df$Samples),'_',fixed=TRUE)))
+df$Zone <-foox$X1
+df$Size <-foox$X2
 rownames(df) <- df[,1]
-
-df
-
-
-physeq_MERGED_zone_FRACTIONS
-#cambio il metadata
-
 sample_data(physeq_MERGED_zone_FRACTIONS)<-sample_data(df)
-physeq_MERGED_zone_FRACTIONS
-
-sample_variables(physeq_MERGED_zone_FRACTIONS)
-sample_data(physeq_MERGED_zone_FRACTIONS)
-
-
-
 physeq_MERGED_zone_FRACTIONS<-subset_samples(physeq_MERGED_zone_FRACTIONS, !(  Size=="na" ))
 
-data_glom_fract<- psmelt(physeq_MERGED_zone_FRACTIONS) # create dataframe from phyloseq object
-data_glom_fract$Genus <- as.character(data_glom_fract$Genus) #convert to character
+data_glom_fract<- psmelt(physeq_MERGED_zone_FRACTIONS)  
+data_glom_fract$Genus <- as.character(data_glom_fract$Genus) 
 data_glom_fract$Abundance<-(data_glom_fract$Abundance*100)
-
 
 newSTorder =c( "ANE","ANW","ASE",
                "ASW","ION" , "IOS","PON","PSE","PSW","MED" ,"RED","ARC","SOC")
 data_glom_fract$Zone<- as.character(data_glom_fract$Zone)
 data_glom_fract$Zone <- factor(data_glom_fract$Zone, levels=newSTorder)
 
-
 data_glom_fract<-data_glom_fract %>% 
   mutate(Size = str_replace(Size, "Prokaryotes Fractions", "FLB"))%>% 
   mutate(Size = str_replace(Size, "Protist Fraction", "PAB"))
-
-
 
 ggplot(data_glom_fract, aes(Zone, Size, fill= Abundance)) + 
   geom_tile()+ theme(axis.text.x = element_text(angle = 90))+scale_fill_gradient( na.value="black")+
@@ -261,23 +197,21 @@ ggplot(data_glom_fract, aes(Zone, Size, fill= Abundance)) +
 
 
 
-###################################################################################### 
-### Depth
-############################################################################################################################# 
+ ```
+####  Depth
+ ```
 variable1 = as.character(get_variable(VIBRIO, "Zone"))
 variable2 = as.character(get_variable(VIBRIO, "Depth"))
 # variable3 = as.character(get_variable(physeq, "Distance1"))
 
 sample_data(VIBRIO)$NewPastedVar <- mapply(paste, variable1, variable2  
                                            , sep = "_")
-sample_data(VIBRIO)
 
 physeq_MERGED_zone_DEPTH<-merge_samples_mean(VIBRIO, "NewPastedVar")
-sample_data(physeq_MERGED_zone_DEPTH)
-
-#per far quello che facevo su excel
+ 
+ 
 rm(df)
-# (as.data.frame(sample_names(physeq_MERGED_zone_DEPTH)))
+ 
 ttt<-nrow(as.data.frame(sample_names(physeq_MERGED_zone_DEPTH)))
 df <- data.frame(matrix(ncol = 1, nrow = ttt))
 df$names<-(as.data.frame(sample_names(physeq_MERGED_zone_DEPTH)))
@@ -286,26 +220,14 @@ colnames(df)[1] <- "Samples"
 foo <- data.frame(do.call('rbind', strsplit(as.character(df$Samples),'_',fixed=TRUE)))
 df$Zone <-foo$X1
 df$W_Layer <-foo$X2
-colnames(df)
-
 rownames(df) <- df[,1]
-
-df
-
-
-# physeq_MERGED_zone_DEPTH
-#cambio il metadata
-
 sample_data(physeq_MERGED_zone_DEPTH)<-sample_data(df)
-physeq_MERGED_zone_DEPTH
-
-head(sample_variables(physeq_MERGED_zone_DEPTH))
-head(sample_data(physeq_MERGED_zone_DEPTH))
-
+ 
+#remove mix zzz and na depths
 physeq_MERGED_zone_DEPTH<-subset_samples(physeq_MERGED_zone_DEPTH, !( ( W_Layer=="MIX" | W_Layer=="ZZZ"| W_Layer=="NA")))
 
-data_glom_depth<- psmelt(physeq_MERGED_zone_DEPTH) # create dataframe from phyloseq object
-data_glom_depth$Genus <- as.character(data_glom_depth$Genus) #convert to character
+data_glom_depth<- psmelt(physeq_MERGED_zone_DEPTH)  
+data_glom_depth$Genus <- as.character(data_glom_depth$Genus)  
 data_glom_depth$Abundance<-(data_glom_depth$Abundance*100)
 
 depth_order = c(
@@ -331,10 +253,7 @@ bb_depth <- c(0, 0.5,1,1.5,2,2.5,3) # define breaks.
 ll_depth <- c("0%","0.5%","1%","1.5%","2%","2.5%","3%") # labels.
 
 
-#########################  plot 
-library(ggh4x)
-
-HMDEPTH<-  ggplot(data_glom_depth, aes(Zone, W_Layer, fill= Abundance)) + 
+ ggplot(data_glom_depth, aes(Zone, W_Layer, fill= Abundance)) + 
   geom_tile()+ theme(axis.text.x = element_text(angle = 90))+scale_fill_gradient( na.value="black")+
   theme(panel.background = element_rect(fill = 'black'),panel.grid.major = element_blank(),
         panel.grid.minor = element_blank()) +scale_fill_viridis_c(option = "H",limits = c(0,4))+ 
@@ -344,13 +263,12 @@ HMDEPTH<-  ggplot(data_glom_depth, aes(Zone, W_Layer, fill= Abundance)) +
                                                axis.text.x=element_blank(),axis.ticks.x =element_blank())+scale_y_discrete(expand = c(0, 0))+
     scale_x_discrete(expand = c(0, 0))+labs(y= "Depth")+ theme(text = element_text(size = 20)) 
 
+```
 
 
+4. **Extract Vibrio Reads (RefSeq)
 
-######################################################################
-# 4. Extract reads classified as Vibrio using RefSeq classified reads
-######################################################################
-
+```
 cat $SAMPLE | parallel -j 10 \
 "python3 ~/extract_kraken_reads.py \
 -k ${REFSEQ_OUT}/{}_output_refseq.kraken \
@@ -359,11 +277,11 @@ cat $SAMPLE | parallel -j 10 \
 --taxid 662 --include-children \
 -o ${REFSEQ_OUT}/{}_extracted_reads_vibrio_1.fa \
 -o2 ${REFSEQ_OUT}/{}_extracted_reads_vibrio_2.fa"
+```
 
-#####################################################################################
-# 5. Kraken2 classification with Enterobase database using Vibrio extracted reads
-#####################################################################################
 
+5. **Kraken2 Classification with Enterobase**:
+```
 cat $SAMPLE | parallel -j 10 \
 "kraken2 --db ${ENT_KRA_DB} \
 --paired ${REFSEQ_OUT}/{}_extracted_reads_vibrio_1.fa ${REFSEQ_OUT}/{}_extracted_reads_vibrio_2.fa \
@@ -371,18 +289,16 @@ cat $SAMPLE | parallel -j 10 \
 --use-names \
 --report ${ENT_OUT}/{}_report-kraken_entero.txt \
 --output ${ENT_OUT}/{}_output_entero.kraken"
-
-###############################################################
-# 6. Bracken species-level refinement after Kraken2 (Enterobase)
-###############################################################
-
+```
+6. **Bracken Species-Level Refinement (Enterobase)**
+```
 cat $SAMPLE | parallel -j 10 \
 "bracken -d ${ENT_KRA_DB} \
 -i ${ENT_OUT}/{}_report-kraken_entero.txt \
 -o ${ENT_OUT}/{}_bracken_species_entero.txt \
 -l S"
 combine_bracken_outputs.py --files *.txt -o ../braken_all_ENTERO_prokEprot_merged/braken_all_ENTERO_prokEprot_merged.txt
-
+```
 
 
 library(phyloseq)
