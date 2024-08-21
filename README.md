@@ -15,9 +15,9 @@ This pipeline processes metagenomic TARA Ocean to analyze the Vibrio presence in
 9. **Simka kmers spectrum of Vibrio sequences** --> fig 1D (k-PCoA), 2A/B (Vibrio Bioregions), 3 B/C/D/E/F/G
 
 ### Contigs Analysis
-1. **Megahit Co-Assembling using Vibrio reads**
-2. **Species Taxonomy**
-3. **Salmon Quantification** --> fig 4A/B
+10. **Megahit Co-Assembling using Vibrio reads**
+11. **Species Taxonomy**
+12. **Salmon Quantification** --> fig 4A/B
 
 
 ## Script
@@ -71,7 +71,7 @@ cat $SAMPLE | parallel -j 10 \
 combine_bracken_outputs.py --files *.txt -o ../braken_all_REFSEQ_prokEprot_merged/braken_all_REFSEQ_prokEprot_merged.csv ```
 ```
 
-### Figure 1A
+### Figure 1A (bubleplot)
 
 ```
 library(phyloseq)
@@ -144,7 +144,7 @@ ggplot(data_glom, aes(x = Sample, y = fct_reorder(Genus, NEG_TOT_ABUNDANCE), siz
    theme(text = element_text(size = 20))+scale_y_discrete(limits=rev)
 ```
 
-### Figure 1B
+### Figure 1B (heatmap Vibrio)
 ```
 VIBRIO <- subset_taxa(GP1, Genus=="Vibrio" )
  ```
@@ -297,10 +297,10 @@ cat $SAMPLE | parallel -j 10 \
 -i ${ENT_OUT}/{}_report-kraken_entero.txt \
 -o ${ENT_OUT}/{}_bracken_species_entero.txt \
 -l S"
-combine_bracken_outputs.py --files *.txt -o ../braken_all_ENTERO_prokEprot_merged/braken_all_ENTERO_prokEprot_merged.txt
+combine_bracken_outputs.py --files *.txt -o ../braken_all_ENTERO_prokEprot_merged/braken_all_ENTERO_prokEprot_merged.csv
 ```
-
-
+### Figure 1C (Richness)
+```
 library(phyloseq)
 library(ggside)
 library(vegan)
@@ -319,14 +319,9 @@ library(ggdist)
 #####                      importing data                           ####
 
 
-abund_table<-read.csv("input/OTUtable_ALL_ENTERO_derep.csv",row.names=1, check.names=FALSE,sep = ";")
+abund_table<-read.csv("input/braken_all_ENTERO_prokEprot_merged.csv",row.names=1, check.names=FALSE,sep = ";")
 abund_table<-t(abund_table)
-
-#TAXONOMY table
 OTU_taxonomy<-read.csv("input/braken_all_ENTERO_prokEprot_merged_fract_INPUT_R_OTU_TAX.csv",row.names=1,check.names=FALSE,sep = ";")
-nrow(OTU_taxonomy)
-
-
 meta_table<-read.csv("input/braken_all_REFSEQ_prokEprot_merged_fract_METAWcooRd.csv",row.names=1,check.names=FALSE,sep = ";")
 
 #Convert the data to phyloseq format
@@ -335,13 +330,7 @@ TAX = tax_table(as.matrix(OTU_taxonomy))
 SAM = sample_data(meta_table)
 physeq<-merge_phyloseq(phyloseq(OTU, TAX, SAM))
 
-#####################################################################################################################
 
-#####   alfadiversity
-
-#####################################################################################################################
-
-###############   #fig 1C
 
 OTU_ceiling = otu_table(as.matrix(ceiling(abund_table)), taxa_are_rows = T)
 
@@ -357,8 +346,6 @@ p1$data$Depth<- as.character(p1$data$Depth)
 p1$data$Depth <- factor(p1$data$Depth, levels=newSTorder)
 
 
-#latitudine 
-
 min(p1$data$Latitude)
 max(p1$data$Latitude)
 
@@ -370,88 +357,36 @@ ggplot(p1$data,aes(Latitude,value))+
   theme(        ggside.panel.scale.y = .4)+scale_ysidex_discrete()+
   geom_smooth(aes(colour = Fraction3),size=1.5)+ ylab('Richness') + labs(color='Fraction')  +
   scale_x_continuous(breaks = seq(-65, 80, by = 20))#, expand = c(0, 0)  
-
-
-
-
-
-#####################################################################################################################
-###    FIG S2 t-PCoA
-#####################################################################################################################
-
-############merge average per zona
-
-
+```
+### Figure S2 (t-PCoA)
+```
+ 
 variable1 = as.character(get_variable(physeq, "Zone"))
 variable2 = as.character(get_variable(physeq, "Fraction3"))
-# variable3 = as.character(get_variable(physeq, "Distance1"))
 
 sample_data(physeq)$NewPastedVar <- mapply(paste, variable1, variable2  
                                            , sep = "_")
-sample_data(physeq)
-# write.csv(sample_data(physeq),"sample_data_physeq.csv")#ho messo i nomi come quella dei kmers
-# sample_data(physeq)<-sample_data(read.csv("sample_data_physeq.csv",row.names=1, check.names=FALSE,sep = ";"))
-
 
 physeq_MERGED_zone_FRACTION<-merge_samples_mean(physeq, "NewPastedVar")#cambiato er fare la mantel, per fare b div ricalcolarlo DHN 
-
-
-
-
-
-
-
-sample_variables(physeq_MERGED_zone_FRACTION)
-sample_data(physeq_MERGED_zone_FRACTION)
-sample_names(physeq_MERGED_zone_FRACTION)
-
-
-#per far quello che facevo su excel
 rm(df)
 RR<-nrow(as.data.frame(sample_names(physeq_MERGED_zone_FRACTION)))
 df <- data.frame(matrix(ncol = 1, nrow = RR))
 df$names<-(as.data.frame(sample_names(physeq_MERGED_zone_FRACTION)))
-
 df<-df[,2]
 colnames(df)[1] <- "Samples"
-
 foo <- data.frame(do.call('rbind', strsplit(as.character(df$Samples),'_',fixed=TRUE)))
 df$Zone <-foo$X1
 df$Fraction <-foo$X2
-colnames(df)
-
 rownames(df) <- df[,1]
-
-# df$Ocean<-c(rep("Atlantic",9),rep("Polar",5),rep("Atlantic",8),rep("Indian",9),rep("Sea",5),rep("Pacific",12),
-#            rep("Sea",4),rep("Polar",4))
 df$Ocean<-c(rep("Atlantic",4),rep("Polar",2),rep("Atlantic",4),rep("Indian",4),rep("Sea",2),rep("Pacific",6),
             rep("Sea",2),rep("Polar",2))
 
-physeq_MERGED_zone_FRACTION
-#cambio il metadata
-
-
-
-
 sample_data(physeq_MERGED_zone_FRACTION)<-sample_data(df)
-physeq_MERGED_zone_FRACTION
-
-sample_variables(physeq_MERGED_zone_FRACTION)
-sample_data(physeq_MERGED_zone_FRACTION)
-
-
-
 physeq_MERGED_zone_FRACTION1<-subset_samples(physeq_MERGED_zone_FRACTION, !(  Fraction=="NA" ))
-# physeq_MERGED_zone_FRACTION1<-subset_samples(physeq_MERGED_zone_FRACTION, !(  Samples=="IOS_20-180" ))
-
-
-
-##beta diversity  
 
 otu.ord <- ordinate(physeq = physeq_MERGED_zone_FRACTION1, "PCoA")
-sample_variables(physeq_MERGED_zone_FRACTION1)
-#asse 1-2  
-library(ggforce)
+
+
 a<-plot_ordination(physeq = physeq_MERGED_zone_FRACTION1, otu.ord,color = "Fraction",shape = "Ocean",
                    axes =c(1,2))+
   geom_text(aes(label=Zone), Fraction = 3, vjust = 0,hjust=0, show.legend = FALSE)+
@@ -470,8 +405,26 @@ OTUdf = as.data.frame(OTU_matrix)
 BC_TAX<-vegdist(t(OTUdf),method = "bray")
 env_data = as.data.frame(sample_data(physeq_MERGED_zone_FRACTION))
 adonis2(BC_TAX~env_data$Fraction*env_data$Ocean, permutations = 9999)
+```
+7. **Extract Vibrio Reads (Enterobase)**
+```
+cat $SAMPLE | parallel -j 10 \
+"python3 ~/extract_kraken_reads.py \
+-k ${ENT_OUT}/{}_output_entero.kraken \
+-s1 ${REFSEQ_OUT}/{}_extracted_reads_vibrio_1.fa \
+-s2 ${REFSEQ_OUT}/{}_extracted_reads_vibrio_2.fa \
+--taxid 662 --include-children \
+-o ${ENT_OUT}/{}_extracted_reads_vibrio_entero_1.fa \
+-o2 ${ENT_OUT}/{}_extracted_reads_vibrio_entero_2.fa"
+```
+9. **Simka kmers spectrum of Vibrio sequences**
 
-## Mantel between bray taxonomy and kmers matrices 
+####  simka all samples --> used for the k-PCoA
+```
+simka -in imput_simka.txt -out results -kmer-size 31  -max-merge 4 -max-reads 0 -min-shannon-index 1.5
+```
+### Mantel between bray taxonomy and kmers matrices 
+```
 BC_TAX<-vegdist(t(OTUdf),method = "bray")
 BC_kmers=as.matrix(read.table("mat_abundance_braycurtis.csv",sep=";", header=TRUE, row.names=1))
 BC_kmers[upper.tri(BC_kmers)] <- 0
@@ -479,38 +432,13 @@ BC_kmersDist <- as.dist(BC_kmers, diag = TRUE)
 df <- data.frame( Kmers=BC_kmersDist[lower.tri(BC_kmersDist)], TAX=as.dist(BC_TAX)[lower.tri(as.dist(BC_TAX))])
 set.seed(1234)
 mantel(xdis =BC_TAX ,ydis = BC_kmersDist,method = "pearson",permutations = 9999)
-
-
-
-## Plot Fig 1D k-PCoA
-iMDS  <- ordinate(physeq_MERGED_zone_FRACTION, "PCoA", distance=BC_kmersDist)  
- physeq_MERGED_zone_FRACTION_kmears<-physeq_MERGED_zone_FRACTION
- sample_names(physeq_MERGED_zone_FRACTION_kmears)
- 
- 
- ### cambio i nomi
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("*_FLB$", "_BACT",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("*_PAB$", "_PROT", sample_names(physeq_MERGED_zone_FRACTION_kmears))
- 
- 
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ANE_(\\w+)", "\\1_ANE",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ANW_(\\w+)", "\\1_ANW",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ARC_(\\w+)", "\\1_ARC",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ASE_(\\w+)", "\\1_ASE",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ASW_(\\w+)", "\\1_ASW",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("ION_(\\w+)", "\\1_ION",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("IOS_(\\w+)", "\\1_IOS",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("MED_(\\w+)", "\\1_MED",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("PON_(\\w+)", "\\1_PON",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("PSE_(\\w+)", "\\1_PSE",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("PSW_(\\w+)", "\\1_PSW",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("RED_(\\w+)", "\\1_RED",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
-  sample_names(physeq_MERGED_zone_FRACTION_kmears) <- gsub("SOC_(\\w+)", "\\1_SOC",  sample_names(physeq_MERGED_zone_FRACTION_kmears))
- 
-  sample_data(physeq_MERGED_zone_FRACTION_kmears)<-sample_data(read.csv("sample_data_physeq_MERGED_zone_FRACTION.csv",row.names=1, check.names=FALSE,sep = ";"))
-  
-  
- 
+```
+### Figure 1D (k-PCoA)
+```
+iMDS  <- ordinate(physeq_MERGED_zone_FRACTION, "PCoA", distance=BC_kmersDist)
+physeq_MERGED_zone_FRACTION_kmears<-physeq_MERGED_zone_FRACTION
+sample_names(physeq_MERGED_zone_FRACTION_kmears) 
+sample_data(physeq_MERGED_zone_FRACTION_kmears)<-sample_data(read.csv("sample_data_physeq_MERGED_zone_FRACTION.csv",row.names=1, check.names=FALSE,sep = ";"))
  
 plot_ordination(physeq_MERGED_zone_FRACTION_kmears, iMDS,color = "Ocean",shape = "Ocean",
                    axes =c(1,2))+
@@ -522,42 +450,13 @@ plot_ordination(physeq_MERGED_zone_FRACTION_kmears, iMDS,color = "Ocean",shape =
   theme_bw() +  scale_xsidey_continuous(breaks = NULL, labels = "", expand = expansion(c(0,.1))) +
   scale_ysidex_continuous(breaks = NULL, labels = "", expand = expansion(c(0,.1))) +scale_ysidex_discrete()+
   ggside::theme_ggside_void() 
-
- 
-
-
-
-
-
-####################################################################
-# 7. Extract reads classified as Vibrio using Enterobase classified reads
-####################################################################
-
-cat $SAMPLE | parallel -j 10 \
-"python3 ~/extract_kraken_reads.py \
--k ${ENT_OUT}/{}_output_entero.kraken \
--s1 ${REFSEQ_OUT}/{}_extracted_reads_vibrio_1.fa \
--s2 ${REFSEQ_OUT}/{}_extracted_reads_vibrio_2.fa \
---taxid 662 --include-children \
--o ${ENT_OUT}/{}_extracted_reads_vibrio_entero_1.fa \
--o2 ${ENT_OUT}/{}_extracted_reads_vibrio_entero_2.fa"
-
-
-##  simka all samples --> used for the k-PCoA (fig 1D see line 599)
-
-simka -in imput_simka.txt -out results -kmer-size 31  -max-merge 4 -max-reads 0 -min-shannon-index 1.5
-
-
-
-
-## simka only superficial samples -> used for bioregions (Figure 2 A) and Vibrio surface dispersion through Oceans (fig 3B to G) 
+```
+####  simka only superficial samples -> used for bioregions (Figure 2 A/B) and Vibrio surface dispersion through Oceans (fig 3B to G) 
+```
 simka -in input_sinka_derep_SRF.txt -out simka_SRF -kmer-size 31 -max-reads 0 -min-shannon-index 1.5
-
-
-
-#####
-####   BIOREGIONS
-####
+```
+### Figure2 A/B (bioregions)
+```
 library(scales)
 
 file_paths <- c(
@@ -567,22 +466,14 @@ file_paths <- c(
   "SRF_180_2000_mat_abundance_braycurtis.csv"
 )
 
-# Lettura dei file CSV in matrici
+
 matrices <- lapply(file_paths, read.csv, row.names = 1, sep = ";")
-matrices
-
-
-
-
-
-
-# Esecuzione della PCoA
 pcoa_results <- lapply(matrices, function(matrix) {
   dist_matrix <- as.dist(matrix) # Assicurati che sia una matrice di distanza
   cmdscale(dist_matrix, eig = TRUE, k = 3, add = TRUE)  
 })
 
-# Nomi per i risultati PCoA
+
 names(pcoa_results) <- c("0.22-3", "3-20", "20-180", "180-2000")
 
 # Calcolo dei valori RGB per ogni set di risultati PCoA
@@ -611,10 +502,7 @@ rgb_results <- lapply(pcoa_results, function(result) {
   return(rgb_values)
 })
 
-# Lettura delle coordinate delle stazioni
 coordinate <- read.csv2("cytoscape_samples_coordinates.csv", sep = ";")
-
-# Loop per ciascuno dei set di dati
 for (set_name in names(rgb_results)) {
   
   # Unione dei risultati RGB con le coordinate
@@ -632,23 +520,20 @@ for (set_name in names(rgb_results)) {
   }
   
   # Riscalare i valori RGB
-  normalize_rgb <- function(rgb_df) {
+  rescale_rgb <- function(rgb_df) {
     rgb_df$r <- rescale_to_255(rgb_df$r)
     rgb_df$g <- rescale_to_255(rgb_df$g)
     rgb_df$b <- rescale_to_255(rgb_df$b)
     return(rgb_df)
   }
   
-  # Applicare la normalizzazione ai valori RGB
-  normalized_rgb_df <- normalize_rgb(rgb_df)
-  
-  # Unire i risultati normalizzati con le coordinate
-  merged_data <- merge(coordinate, normalized_rgb_df, by = "Sample")
+  rescaled_rgb_df <- rescale_rgb(rgb_df)
+  rescaled_data <- merge(coordinate, rescaled_rgb_df, by = "Sample")
   
   # Conversione dei valori RGB in colori esadecimali
   merged_data$color <- apply(merged_data[, c("r", "g", "b")], 1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
   
-  #FIG2A
+ 
   ggplot() +
     borders("world", colour = "gray50", fill = "gray50") + # Aggiunge i confini del mondo
     geom_point(data = merged_data, aes(x = as.numeric(Longitude), y = as.numeric(Latitude), color = color), size = 3) +
@@ -693,25 +578,11 @@ ggplot(df_combined, aes(x = Fraction, y = Value, fill = Fraction)) +
   scale_fill_brewer(palette = "Set3")
 
 
+```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##################################################
-############# cumulative correlarions############# 
-##################################################
+### Figure 3B (Cumulative Correlations)
+```
 library(ggplot2)
 library(plyr )
 files <- c("cytoscape/file_conx/SRF_0.22-3_TimTrav.csv",
