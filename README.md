@@ -266,7 +266,7 @@ ll_depth <- c("0%","0.5%","1%","1.5%","2%","2.5%","3%") # labels.
 ```
 
 
-4. **Extract Vibrio Reads (RefSeq)
+4. **Extract Vibrio Reads (RefSeq)**
 
 ```
 cat $SAMPLE | parallel -j 10 \
@@ -280,7 +280,7 @@ cat $SAMPLE | parallel -j 10 \
 ```
 
 
-5. **Kraken2 Classification with Enterobase**:
+5. **Kraken2 Classification with Enterobase**
 ```
 cat $SAMPLE | parallel -j 10 \
 "kraken2 --db ${ENT_KRA_DB} \
@@ -619,18 +619,15 @@ a <- data.frame(DBs[[1]], DBs[[2]], "0.22-3")
 b <- data.frame(DBs[[3]], DBs[[4]], "5-20")
 c <- data.frame(DBs[[5]], DBs[[6]], "20-180")
 d <- data.frame(DBs[[7]], DBs[[8]], "180-2000")
-
-# Creazione di una lista contenente i data frame
 dataframes <- list(a, b, c, d)
 
-# Loop per applicare le operazioni su tutti i data frame
 for (i in 1:length(dataframes)) {
   colnames(dataframes[[i]])[1] <- "years.trav.time"
   colnames(dataframes[[i]])[2] <- "R"
   colnames(dataframes[[i]])[3] <- "Fraction"
 }
 
-# Assegnazione dei data frame modificati ad a, b, c, d
+
 a <- dataframes[[1]]
 b <- dataframes[[2]]
 c <- dataframes[[3]]
@@ -641,44 +638,26 @@ newSTorder = c( "0.22-3","5-20","20-180" ,"180-2000")
 
 allDF$Fraction<- as.character(allDF$Fraction)
 allDF$Fraction <- factor(allDF$Fraction, levels=newSTorder) 
-
-#rangesssss
 allDF$years.trav.time_ranges<-round(allDF$years.trav.time+0.5)
- 
 allDF$years.trav.time_ranges2<-round_any(allDF$years.trav.time, 0.5, f=ceiling)
  
 
 #### fig 3B
 ggplot(allDF, aes(x = years.trav.time, y = R, color = Fraction)) +
     geom_point(alpha = 0.1) +#, color = "black"
-    geom_smooth(method = "gam", se = FALSE, formula = y ~ s(x, bs = "cs")) +  # Metodo GAM
-    scale_y_continuous(limit = c(-0.25, 0.75)) +
-    scale_x_continuous(limit = c(0.75, 5), breaks = round(seq(min(allDF$years.trav.time),
+    geom_smooth(method = "gam", se = FALSE, formula = y ~ s(x, bs = "cs")) +  
+    scale_x_continuous(limit = c(0, 5), breaks = round(seq(min(allDF$years.trav.time),
                                                                max(allDF$years.trav.time),
                                                                by = 0.5), 1)) +
     labs(color = "")+
   geom_smooth(method = "gam", se = FALSE, formula = y ~ s(x, bs = "cs"), color = "darkred", linetype = "dashed", size = 1.5) +
-    theme(panel.background = element_blank(),  # Background bianco
-          panel.grid.major = element_blank(),  # Griglia grigia
-          panel.grid.minor = element_blank())  # Nascondi griglia minore
+    theme(panel.background = element_blank(), 
+          panel.grid.major = element_blank(),  
+          panel.grid.minor = element_blank())  
 
-
-
-
-
-
-
-
-
-
-
-#########################################################
-###############correlazioni simi and trav time
-#######################################################
-
-
-
-
+```
+### Figure 3C (Correlation similarity vs travel time)
+```
 
 library(reshape2)
 library(geodist)
@@ -692,33 +671,20 @@ color_palette <- c("SRF_0.22-3" = "red", "SRF_5-20" = "blue", "SRF_20-180" = "gr
 fraction_levels <- c("SRF_0.22-3", "SRF_5-20", "SRF_20-180", "SRF_180-2000")
 
 list2<-data.frame(coordinate$Longitude,coordinate$Latitude,coordinate$Sample)
-
-colnames(list2)
 colnames(list2)[1] ="longitude"
 colnames(list2)[2] ="latitude"
 colnames(list2)[3] ="name"
 
-distance_matrix <- geodist(list2, measure = 'geodesic' )/1000 #converting it to km
-
-#also, check for other measures in the description
-
+distance_matrix <- geodist(list2, measure = 'geodesic' )/1000  
 colnames(distance_matrix) <- list2$name
 rownames(distance_matrix) <- list2$name
-
-head.matrix(distance_matrix)
-
-
 
 mat=as.matrix(distance_matrix)
 melted<-reshape2::melt(mat)
 newDF<-melted
- 
-
 newDF$merged<-paste(newDF$Var1,newDF$Var2,sep = "_")
 colnames(newDF)[4] ="conx"
 colnames(newDF)[3] ="dist_km"
-head(newDF)
-
 file_paths <- c(
   "cytoscape/file_conx/SRF_0.22-3_TimTrav.csv",
   "cytoscape/file_conx/SRF_5-20_TimTrav.csv",
@@ -726,12 +692,7 @@ file_paths <- c(
   "cytoscape/file_conx/SRF_180-2000_TimTrav.csv"
 )
 
-#head(read.csv("cytoscape/file_conx/SRF_0.22-3_TimTrav.csv", sep = ","))
-##### loop per legegre i dati e filtarre <  1.5 !!!
-
 correlation_data <- list()
-
-
 for (file_path in file_paths) {
   cc <- read.csv(file_path, sep = ",")
   name <- gsub("cytoscape/file_conx/|_TimTrav.csv", "", file_path)
@@ -741,9 +702,6 @@ for (file_path in file_paths) {
   correlation_data[[name]] <- merged_data
 }
 
-
-# fig 3C
-
 plot <- ggplot()
 for (fraction in names(correlation_data)) {
   df <- correlation_data[[fraction]]
@@ -751,39 +709,23 @@ for (fraction in names(correlation_data)) {
   plot <- plot + geom_smooth(data = df, aes(y = similarity, x = tempo.medio.anni, color = fraction), method = "lm") +
     geom_smooth(data = df, aes(y = similarity, x = tempo.medio.anni), method = "lm", color = color_palette[fraction], fill = color_palette[fraction], alpha = 0.2)
 }
-
-# Ordinamento della legenda
 plot <- plot + scale_color_manual(values = color_palette, guide = guide_legend(order = 1))
-
-# Visualizzazione del plot
 plot
-#Fisher's z-Tests Concerning Difference of Correlations
 
 
-library(diffcor)
-
-# Creazione del dataframe vuoto
+```
+####Fisher's z-Tests
+```
 df <- data.frame(fraction = character(), correlation = numeric(), p_value = numeric(), diff_corr = numeric(), stringsAsFactors = FALSE)
-
-# Calcolo delle correlazioni e p-value per ogni frazione
 for (fraction in names(correlation_data)) {
   data <- correlation_data[[fraction]]
-  
-  # Calcolo della correlazione
   r <- round(cor(data$similarity, data$tempo.medio.anni), 2)
-  
-  # Calcolo del p-value
   p <- cor.test(data$similarity, data$tempo.medio.anni)$p.value
-  
-  # Aggiunta delle informazioni al dataframe
   df <- rbind(df, data.frame(fraction = fraction, correlation = r, p_value = p, length=nrow(data)))
 }
 
-# Visualizzazione del dataframe
 df
 diff_df <- data.frame(fraction1 = character(), fraction2 = character(), diff_corr = numeric(), stringsAsFactors = FALSE)
-
-# Calcolo delle differenze in correlazione per ogni combinazione di frazioni
 for (i in 1:(nrow(df) - 1)) {
   for (j in (i + 1):nrow(df)) {
     fraction1 <- df$fraction[i]
@@ -792,23 +734,14 @@ for (i in 1:(nrow(df) - 1)) {
     correlation2 <- df$correlation[j]
     length1 <- df$length[i]
     length2 <- df$length[j]
-    
-    # Calcolo della differenza in correlazione
     diff_corr <- diffcor.two(correlation1, correlation2, length1, length2, digit = 3)
-    
-    # Aggiunta delle informazioni al dataframe delle differenze in correlazione
     diff_df <- rbind(diff_df, data.frame(fraction1 = fraction1, fraction2 = fraction2, diff_corr))
   }
 }
 
-# Visualizzazione del dataframe delle differenze in correlazione
-diff_df
-
-
-#########################################################
-###############correlazioni simi e km 
-#######################################################
-
+```
+### Figure 3D (Correlation similarity vs km)
+```
 
 library(raster)
 library(maptools)
@@ -822,49 +755,24 @@ library(ggplot2)
 library(ggpubr)
 library(diffcor)
 
-
-
-
 coordinate<-read.csv2("cytoscape_samples_coordinates.csv",sep = ";")
-head(coordinate)
-
-
 
 rm(list2)
 list2<-data.frame(coordinate$Longitude,coordinate$Latitude,coordinate$Sample)
-
-colnames(list2)
 colnames(list2)[1] ="longitude"
 colnames(list2)[2] ="latitude"
 colnames(list2)[3] ="name"
-
-distance_matrix <- geodist(list2, measure = 'geodesic' )/1000 #converting it to km
-
-#also, check for other measures in the description
-
+distance_matrix <- geodist(list2, measure = 'geodesic' )/1000 
 colnames(distance_matrix) <- list2$name
 rownames(distance_matrix) <- list2$name
-
- 
-
-
 mat=as.matrix(distance_matrix)
 melted<-reshape2::melt(mat)
-
 newDF<-melted
- 
- 
-
 newDF$merged<-paste(newDF$Var1,newDF$Var2,sep = "_")
 colnames(newDF)[4] ="conx"
 colnames(newDF)[3] ="dist_km"
 head(newDF)
 
-
-
-
-
-# Leggi i dati delle correlazioni da diversi file CSV
 file_paths <- c(
   "cytoscape/file_conx/SRF_0.22-3_TimTrav.csv",
   "cytoscape/file_conx/SRF_5-20_TimTrav.csv",
@@ -872,17 +780,8 @@ file_paths <- c(
   "cytoscape/file_conx/SRF_180-2000_TimTrav.csv"
 )
 
-
-
 color_palette <- c("SRF_0.22-3" = "red", "SRF_5-20" = "blue", "SRF_20-180" = "green", "SRF_180-2000" = "purple")
-
-
-# Definizione dell'ordine dei livelli della variabile "fraction"
 fraction_levels <- c("SRF_0.22-3", "SRF_5-20", "SRF_20-180", "SRF_180-2000")
-
-
-
-
 correlation_data <- list()
 
 for (file_path in file_paths) {
@@ -890,39 +789,26 @@ for (file_path in file_paths) {
   name <- gsub("cytoscape/file_conx/|_TimTrav.csv", "", file_path)
   cc$fraction <- rep(name, length(cc$conx))
   merged_data <- merge(cc, newDF, by = "conx", all.x = TRUE)
- # merged_data <- merged_data[merged_data$dist_km <= 5000,]
   correlation_data[[name]] <- merged_data
 }
 
-
-
-# Caricare la libreria dplyr
-library(dplyr)
-
-# Unire tutti i data frame in un unico data frame
 all_data <- bind_rows(correlation_data)
-dim(all_data)
-# Selezionare solo le righe con 'conx' unici
 unique_data <- all_data %>% distinct(conx, .keep_all = TRUE)
-dim(unique_data)
-head(unique_data)
 
- 
 unique_data<-unique_data[, !(names(unique_data) %in% c("X1", "X", "Var1.x" , "Var2.x","Var1.y"  ,"Var2.y"))]
 
-# Salvare il data frame come CSV
+
 write.csv(unique_data, "unique_conx_data.csv", row.names = FALSE)
+
+```
+#### Searoute in python
+```
 
 import pandas as pd
 import searoute as sr
 
-# Leggi il file CSV
 df = pd.read_csv('unique_conx_data.csv')
-
-# Lista per memorizzare le distanze calcolate
 distances = []
-
-# Calcola la distanza tra le coppie di stazioni
 for index, row in df.iterrows():
     origin = [row['Longitude_start'], row['Latitude_start']]
     destination = [row['Longitude_end'], row['Latitude_end']]
@@ -933,64 +819,95 @@ for index, row in df.iterrows():
         print(f"Errore nel calcolo della distanza per la riga {index}: {e}")
         distance_km = None
     distances.append(distance_km)
-
-# Aggiungi la colonna con le distanze calcolate
 df['searoutekm'] = distances
-
-# Salva il risultato in un nuovo file CSV
 df.to_csv('unique_conx_data_with_distances.csv', index=False)
-
-
-### script fatto basandosi su searoutes nella cartella  km_onlywaters
-
+```
+```
 conx_w_coord<-read.csv("km_onlywaters/unique_conx_data_with_distances.csv")
-
-# Definisci una funzione per fare il merge per ogni data frame nella lista
 merge_and_filter <- function(df, conx_w_coord) {
   df <- merge(df, conx_w_coord[, c("conx", "searoutekm")], by = "conx", all.x = TRUE)
   df <- df %>% filter(searoutekm <= 5000)
   return(df)
 }
 
-# Applica la funzione a ogni data frame nella lista e salva il risultato in correlation_data_SR
+
 correlation_data_SR <- lapply(correlation_data, merge_and_filter, conx_w_coord)
 
 
+plot <- ggplot()
+for (fraction in names(correlation_data_SR)) {
+  df <- correlation_data_SR[[fraction]]
+  df$fraction <- factor(reorder(df$fraction, -df$searoutekm), levels = fraction_levels)
+  plot <- plot + 
+    geom_smooth(data = df, aes(y = similarity, x = searoutekm, color = fraction), method = "lm") 
+}
+plot + scale_color_manual(values = color_palette, guide = guide_legend(order = 1))
+```
+
+####Fisher's z-Tests
+```
+df <- data.frame(fraction = character(), correlation = numeric(), p_value = numeric(), diff_corr = numeric(), stringsAsFactors = FALSE)
+for (fraction in names(correlation_data_SR)) {
+  data <- correlation_data_SR[[fraction]]
+  r <- round(cor(data$similarity, data$tempo.medio.anni), 2)
+  p <- cor.test(data$similarity, data$tempo.medio.anni)$p.value
+  df <- rbind(df, data.frame(fraction = fraction, correlation = r, p_value = p, length=nrow(data)))
+}
+
+df
+diff_df <- data.frame(fraction1 = character(), fraction2 = character(), diff_corr = numeric(), stringsAsFactors = FALSE)
+for (i in 1:(nrow(df) - 1)) {
+  for (j in (i + 1):nrow(df)) {
+    fraction1 <- df$fraction[i]
+    fraction2 <- df$fraction[j]
+    correlation1 <- df$correlation[i]
+    correlation2 <- df$correlation[j]
+    length1 <- df$length[i]
+    length2 <- df$length[j]
+    diff_corr <- diffcor.two(correlation1, correlation2, length1, length2, digit = 3)
+    diff_df <- rbind(diff_df, data.frame(fraction1 = fraction1, fraction2 = fraction2, diff_corr))
+  }
+}
 
 
-#########################################################
-###############correlazioni comparison log e zscore
-#######################################################
 
-# Funzione per calcolare lo Z-score
+
+
+
+
+
+
+
+```
+### Figure S4 (Correlation comparison between travel time vs km)
+```
 zscore <- function(x) {
   return((x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))
 }
 
-# Lettura e filtro dei dati di correlazione per distanza e anni
 correlation_data_combined <- data.frame()
-
-for (file_path in file_paths) {
-  cc <- read.csv(file_path, sep = ",")
-  name <- gsub("cytoscape/file_conx/|_TimTrav.csv", "", file_path)
-  cc$fraction <- rep(name, length(cc$conx))
-  merged_data <- merge(cc, newDF, by = "conx", all.x = TRUE)
-  merged_data <- merged_data[merged_data$dist_km <= 5000 & merged_data$tempo.medio.anni < 1.5,]
-  merged_data$log_dist_km <- log1p(merged_data$dist_km)
-  merged_data$log_tempo_anni <- log1p(merged_data$tempo.medio.anni)
-  merged_data$z_log_dist_km <- zscore(merged_data$log_dist_km)
-  merged_data$z_log_tempo_anni <- zscore(merged_data$log_tempo_anni)
-  merged_data_long <- melt(merged_data, id.vars = c("conx", "similarity", "fraction"), measure.vars = c("z_log_dist_km", "z_log_tempo_anni"), variable.name = "type", value.name = "z_log_value")
-  correlation_data_combined <- rbind(correlation_data_combined, merged_data_long)
+for (fraction in names(correlation_data_SR)) {
+  df <- correlation_data_SR[[fraction]]
+  df$fraction <- rep(fraction, nrow(df))
+  
+  df_km <- df[df$searoutekm <= 5000,]
+  df_km$log_dist_km <- log1p(df_km$searoutekm)
+  df_km$z_log_dist_km <- zscore(df_km$log_dist_km)
+  df_km_long <- melt(df_km, id.vars = c("conx", "similarity", "fraction"), measure.vars = "z_log_dist_km", variable.name = "type", value.name = "z_log_value")
+  
+  df_time <- df[df$tempo.medio.anni < 1.5,]
+  df_time$log_tempo_anni <- log1p(df_time$tempo.medio.anni)
+  df_time$z_log_tempo_anni <- zscore(df_time$log_tempo_anni)
+  df_time_long <- melt(df_time, id.vars = c("conx", "similarity", "fraction"), measure.vars = "z_log_tempo_anni", variable.name = "type", value.name = "z_log_value")
+  correlation_data_combined <- rbind(correlation_data_combined, df_km_long, df_time_long)
 }
 
-# Creazione del plot combinato
+
 plot <- ggplot(correlation_data_combined, aes(x = z_log_value, y = similarity, color = fraction, linetype = type)) +
   geom_smooth(method = "lm") +
   stat_cor(aes(label = paste(..r.label.., sep = "")), method = "pearson", geom = "text", position = position_jitter(width = 0.2, height = 0), show.legend = FALSE) +
   scale_linetype_manual(values = c("z_log_dist_km" = "dashed", "z_log_tempo_anni" = "solid"), labels = c("z_log_dist_km" = "Distance (z_log_km)", "z_log_tempo_anni" = "Time (z_log_years)")) +
-  scale_color_manual(values = color_palette, guide = guide_legend(order = 1)) +
-  labs(x = "Z-score Log-transformed Scale (z_log_km and z_log_years)", y = "Similarity") +
+  scale_color_manual(values = color_palette, guide = guide_legend(order = 1))  +
   theme_minimal() +
   theme(
     axis.title.x = element_text(vjust = -0.5),
