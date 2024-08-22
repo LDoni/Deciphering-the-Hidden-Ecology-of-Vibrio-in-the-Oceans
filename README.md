@@ -1,4 +1,4 @@
-# Deciphering-the-Hidden-Ecology-of-Vibrio-in-the-Oceans
+# Deciphering the Hidden Ecology of Vibrio in the Oceans
 
 This pipeline processes metagenomic TARA Ocean to analyze the *Vibrio* presence in the oceans
 
