@@ -1,6 +1,6 @@
 # Deciphering-the-Hidden-Ecology-of-Vibrio-in-the-Oceans
 
-This pipeline processes metagenomic TARA Ocean to analyze the Vibrio presence in the oceans
+This pipeline processes metagenomic TARA Ocean to analyze the *Vibrio* presence in the oceans
 
 ## Steps Overview
 ### Metagenomic Reads Analysis
