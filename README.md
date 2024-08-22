@@ -1,3 +1,5 @@
+
+
 # Deciphering-the-Hidden-Ecology-of-Vibrio-in-the-Oceans
 
 This pipeline processes metagenomic TARA Ocean to analyze the *Vibrio* presence in the oceans
@@ -16,7 +18,7 @@ This pipeline processes metagenomic TARA Ocean to analyze the *Vibrio* presence 
 
 ### Contigs Analysis
 10. **Megahit Co-Assembling using Vibrio reads**
-11. **Species Taxonomy**
+11. **CAT Species Taxonomy**
 12. **Salmon Quantification** --> fig 4A/B
 
 
@@ -869,15 +871,6 @@ for (i in 1:(nrow(df) - 1)) {
   }
 }
 
-
-
-
-
-
-
-
-
-
 ```
 ### Figure S4 (Correlation comparison between travel time vs km)
 ```
@@ -914,89 +907,55 @@ plot <- ggplot(correlation_data_combined, aes(x = z_log_value, y = similarity, c
     legend.position = "top"
   )
 
-#########################################################
-###############  number edges and similarity Fig3G
-#######################################################
+```
+### Figure 3E (Frequency of edges and their strength of similarity)
+```
 library(dplyr)
 library(reshape2)
 library(geosphere)
+library(ggplot2)
 
 process_file <- function(file_path, time_travel_file, coordinates_file, matrix_name) {
   # Caricare la matrice dal file CSV
   mat <- as.matrix(read.table(file_path, sep=";", header=TRUE, row.names=1))
-  
-  # Convertire la matrice in un dataframe in formato lungo
+
   df <- melt(mat)
-  
-  # Rimuovere le righe dove Var1 è uguale a Var2
   new_df <- df[!df$Var1 == df$Var2,]
-  
-  # Calcolare la similarità
   new_df$similarity <- 1 - new_df$value
   new_df$conx <- paste(new_df$Var1, new_df$Var2, sep = "_")
-  
-  # Caricare il file del time travel
   B <- read.csv2(time_travel_file, sep = " ", header = FALSE)
   colnames(B) <- c("Stazione.partenza", "Stazione.arrivo", "tempo.medio.giorni", "devStand.giorni")
-  
   B <- B[as.numeric(B$tempo.medio.giorni) >= 0, ]
   B <- B[B$Stazione.partenza != B$Stazione.arrivo, ]
   B$tempo.medio.anni <- as.numeric(B$tempo.medio.giorni) / 365
   B$conx <- paste(B$Stazione.partenza, B$Stazione.arrivo, sep = "_")
-  
-  # Unire i dataframe
   C <- merge(new_df, B, by = "conx")
-  
-  # Filtrare il network per tempo.medio.anni <= 1.5
   my_network <- C[C$tempo.medio.anni <= 1.5,]
-  
-  # Caricare le coordinate
   coordinates <- read.csv(coordinates_file, sep = ";")
-  
-  # Filtrare le coordinate per i nodi nel network
   points_list <- coordinates[coordinates$Sample %in% my_network$Var1,]
-  
-  # Calcolare la distanza tra i punti
   dist_matrix <- distm(points_list[, c("Longitude", "Latitude")], fun = distVincentyEllipsoid)
-  
-  # Trovare la distanza minima per ogni coppia di punti
   min_dist <- apply(dist_matrix, 2, function(x) {
     dists <- sort(x)
     dists[2] # La seconda distanza più piccola è la distanza dal punto più vicino
   })
-  
-  # Creare un dataframe con le connessioni e le distanze
   edges_df <- data.frame(
     from = rep(points_list$Sample, each = nrow(points_list)),
     to = rep(points_list$Sample, times = nrow(points_list)),
     distance = min_dist
   )
-  
-  # Rimuovere le connessioni che collegano un punto a se stesso
   edges_df <- edges_df[edges_df$from != edges_df$to, ]
-  
-  # Unire edges_df con il network originale
   df2 <- merge(edges_df, my_network, by.x = c("from", "to"), by.y = c("Var1", "Var2"))
-  
-  # Filtrare le similarità maggiori di 0
   df1 <- df2[df2$similarity > 0,]
-  
-  # Calcolare i ranghi
   n <- 4
   breaks <- seq(0, 1, by = 1/n)
   breaks1 <- seq(0, 1.5, by = 0.5)
   df1$simi_ranges <- cut(as.numeric(df1$similarity), breaks = breaks, labels = FALSE)
   df1$anni_ranges <- cut(as.numeric(df1$tempo.medio.anni), breaks = breaks1, labels = FALSE)
-   
-  # Aggiungere una colonna per identificare la matrice
   df1$matrix_name <- matrix_name
   df3<-table(df1$simi_ranges)
   df3$name<-gsub("_mat_abundance_braycurtis.csv", "", file_path)
-  # Restituire il dataframe risultante
   return(df3)
 }
-
-# Definire i percorsi dei file e i nomi delle matrici
 files <- c("SRF_0.22-3_mat_abundance_braycurtis.csv", 
            "SRF_3-2_mat_abundance_braycurtis.csv", 
            "SRF_20-180_mat_abundance_braycurtis.csv", 
@@ -1004,36 +963,25 @@ files <- c("SRF_0.22-3_mat_abundance_braycurtis.csv",
 matrix_names <- c("SRF_0.22-3", "SRF_3-2", "SRF_20-180", "SRF_180-2000")
 time_travel_file <- "filetime_2023-09-29_17-02-30_tiempo_stdtiempo.txt"
 coordinates_file <- "cytoscape_samples_coordinates.csv"
-
-# Applicare la funzione a ciascun file e combinare i risultati in un unico dataframe
 final_results <- do.call(rbind, lapply(1:length(files), function(i) {
   process_file(files[i], time_travel_file, coordinates_file, matrix_names[i])
 }))
-
-# Visualizzare il risultato finale
 print(final_results)
 
-library(ggplot2)
-
-# Trasformare il risultato finale in un formato lungo
 final_df <- as.data.frame(final_results)
- 
 colnames(final_df) <- c("V1", "V2", "V3", "V4", "Size")
 final_df$V1 <- as.numeric(final_df$V1)
 final_df$V2 <- as.numeric(final_df$V2)
 final_df$V3 <- as.numeric(final_df$V3)
 final_df$V4 <- as.numeric(final_df$V4)
-# Convertire in formato lungo per ggplot
-final_df_long <- melt(final_df, id.vars = "Size", variable.name = "Ranges", value.name = "Numero")
 
-# Riorganizzare i fattori come nell'esempio
+final_df_long <- melt(final_df, id.vars = "Size", variable.name = "Ranges", value.name = "Numero")
 newSTorder = c("SRF_0.22-3", "SRF_3-2", "SRF_20-180", "SRF_180_2000")
 final_df_long$Size <- factor(final_df_long$Size, levels = newSTorder)
 
 newSTorder1 <- c("V4", "V3", "V2", "V1")
 final_df_long$Ranges <- factor(final_df_long$Ranges, levels = newSTorder1)
 
-# Creare il grafico
 ggplot(final_df_long, aes(x = Size, y = Numero, fill = Ranges)) +
   geom_bar(stat = "identity") +
   scale_fill_manual(values = c("V1" = "green", "V2" = "yellow", "V3" = "darkorange", "V4" = "darkred")) +
@@ -1041,11 +989,9 @@ ggplot(final_df_long, aes(x = Size, y = Numero, fill = Ranges)) +
   labs(x = "Size", y = "Numero", fill = "Ranges")
 
 
-
-
-#########################################################
-###############  NODE centrality Fig3F 
-#######################################################
+```
+### Figure 3F (Node centrality)
+```
 library(igraph)
 library(dplyr)
 library(reshape2)
@@ -1054,26 +1000,21 @@ calcola_node_centrality <- function(file_list, file_time, file_coordinates) {
   risultati_lista <- list()
   
   for (file_abundance in file_list) {
-    # Caricamento dei dati
     mat <- as.matrix(read.table(file_abundance, sep = ";", header = TRUE, row.names = 1))
     df <- melt(mat)
     new_df <- df[!df$Var1 == df$Var2, ]
     new_df$similarity <- 1 - new_df$value
     new_df$conx <- paste(new_df$Var1, new_df$Var2, sep = "_")
-    
     B <- read.csv2(file_time)
     C <- merge(new_df, B, "conx")
     my_network <- C[C$tempo.medio.anni < 1.5, ]
-    
     coordinates <- read.csv(file_coordinates, sep = ";")
     points_list <- coordinates[coordinates$Sample %in% my_network$Var1, ]
-    
     dist_matrix <- distm(points_list[, c("Longitude", "Latitude")], fun = distVincentyEllipsoid)
     min_dist <- apply(dist_matrix, 2, function(x) {
       dists <- sort(x)
       dists[2]
     })
-    
     edges_df <- data.frame(
       from = rep(points_list$Sample, each = nrow(points_list)),
       to = rep(points_list$Sample, times = nrow(points_list)),
@@ -1086,169 +1027,118 @@ calcola_node_centrality <- function(file_list, file_time, file_coordinates) {
     df2 <- merge(x = edges_df, y = my_network, by.x = c("from", "to"), by.y = c("Var1", "Var2"))
     df1 <- filter(df2, similarity > 0)
     edges <- df1[, c("from", "to", "similarity")]
-    
-    # Creazione del grafo
     g <- graph.data.frame(edges, directed = TRUE)
-    
-    # Calcolo della centralità di grado (node centrality)
     centr <- centr_degree(g)$res
-    
-    # Creazione del dataframe con i risultati della centralità di grado
     risultati <- data.frame(
       nodo = V(g)$name,
       node_centrality = centr
     )
-    
-    # Ordinamento dei risultati per la centralità di grado
     risultati <- risultati[order(-centr), ]
-    
-    # Aggiunta del dataframe dei risultati alla lista
     risultati_lista[[file_abundance]] <- risultati
   }
   
   return(risultati_lista)
 }
-
-# Utilizzo della funzione con i file CSV specificati
 file_list <- c(
   "SRF_0.22-3_mat_abundance_braycurtis.csv",
   "SRF_180_2000_mat_abundance_braycurtis.csv",
   "SRF_20-180_mat_abundance_braycurtis.csv",
   "SRF_3-2_mat_abundance_braycurtis.csv"
 )
-file_time <- "file_time1_senza_identici.csv"
+
+file_time <- read.csv2("filetime_2023-09-29_17-02-30_tiempo_stdtiempo.txt",sep = " ", header = F)
+colnames(file_time)<-c("Stazione.partenza"  ,"Stazione.arrivo","tempo.medio.giorni" ,"devStand.giorni")
+file_time <- file_time[as.numeric(B$tempo.medio.giorni) >= 0, ]
+file_time <- file_time[file_time$Stazione.partenza !=file_time$Stazione.arrivo, ]
+file_time$tempo.medio.anni <-  as.numeric(file_time$tempo.medio.giorni) / 365
+file_time$conx <- paste(file_time$Stazione.partenza, file_time$Stazione.arrivo, sep = "_")
 file_coordinates <- "cytoscape_samples_coordinates.csv"
 
 risultati_centralita <- calcola_node_centrality(file_list, file_time, file_coordinates)
 
-# Accesso ai risultati per ogni file
 risultati_file_1 <- risultati_centralita[["SRF_0.22-3_mat_abundance_braycurtis.csv"]]
 risultati_file_2 <- risultati_centralita[["SRF_180_2000_mat_abundance_braycurtis.csv"]]
 risultati_file_3 <- risultati_centralita[["SRF_20-180_mat_abundance_braycurtis.csv"]]
 risultati_file_4 <- risultati_centralita[["SRF_3-2_mat_abundance_braycurtis.csv"]]
 
-# Creazione del dataframe finale
 df_completo <- data.frame()
-
-# Iterazione attraverso i dataframe di risultati
 for (nome_file in names(risultati_centralita)) {
   risultati <- risultati_centralita[[nome_file]]
-  
-  # Aggiunta del nome del file come colonna
   risultati$nome_file <- gsub("_mat_abundance_braycurtis.csv", "", nome_file)
-  
-  # Aggregazione dei risultati al dataframe finale
   df_completo <- bind_rows(df_completo, risultati)
 }
-
-# Visualizzazione del dataframe completo
 print(df_completo)
-
 ggplot(df_completo, aes(x=nome_file, y=node_centrality, fill=nome_file)) + 
   geom_boxplot(alpha=0.3,outlier.shape = NA) +
   scale_fill_brewer(palette="Dark2")+
   geom_boxplot() + stat_compare_means(comparisons = my_comparisons)+   stat_compare_means(label.y = 70)  
-
-
-
-
 df_completo$zona<-sub("_.*", "", df_completo$nodo)
 
+```
+### Figure  S5A (Distribution of node centrality boxplot)
+```
 
 
-## fig S 5A
 ggplot(data = df_completo, aes(x = zona, y = node_centrality)) +
-  geom_boxplot(outlier.shape = NA) +  # Creazione del box plot senza mostrare gli outlier
-  geom_jitter(aes(color = nome_file), position = position_jitter(0.2), alpha = 0.7) +  # Aggiunta dei punti con jitter, colorati per frazione
+  geom_boxplot(outlier.shape = NA) +  
+  geom_jitter(aes(color = nome_file), position = position_jitter(0.2), alpha = 0.7) +  
   labs(x = "Zona", y = "node_centrality") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
   geom_hline(yintercept = media_node_centrality, linetype = "dashed", color = "red")
 
 
-## fig S 5B
+```
+### Figure  S5B (Top 30 stations node centrality)
+```
 
   top_stazioni <- df_completo %>% 
      arrange(desc(node_centrality))
    
-   # Calcolare il totale di node_centrality per ogni stazione
    totali_stazioni <- top_stazioni %>%
      group_by(nodo) %>%
      summarise(total_node_centrality = sum(node_centrality))
-   
-   # Riordinare i fattori dell'asse X in base al totale di node_centrality e invertire l'ordine
    top_stazioni <- top_stazioni %>%
      mutate(nodo = factor(nodo, levels = rev(totali_stazioni$nodo[order(-totali_stazioni$total_node_centrality)])))
    top_30_nodi <- top_stazioni %>%
-     arrange(desc(node_centrality)) %>%  # Ordina in base a node_centrality (in ordine decrescente)
-     distinct(nodo, .keep_all = TRUE) %>% # Rimuove i duplicati basati sulla colonna "nodo"
-     slice(1:30) %>%  # Seleziona i primi 30 nodi unici
-     pull(nodo)  # Estrae solo i nomi dei nodi
-   
-   # Passo 2: Filtrare il dataframe `top_stazioni` per includere solo i top 30 nodi univoci
+     arrange(desc(node_centrality)) %>%  
+     distinct(nodo, .keep_all = TRUE) %>% 
+     slice(1:30) %>%  
+     pull(nodo)  
    top_stazioni_filtrato <- top_stazioni %>%
      filter(nodo %in% top_30_nodi)
-   
-   # Visualizzazione del risultato
    print(top_stazioni_filtrato)
-   
    ggplot(data = top_stazioni_filtrato, aes(x = nodo, y = node_centrality, fill = nome_file)) +
      geom_bar(stat = "identity") +
      coord_flip() +
      labs(x = "Stazione", y = "node_centrality", title = "Top 150 stazioni più rilevanti") +
      theme_minimal()
    
-
-
-
-
-
-
-
-#########################################################
-###############   Heatmap per mean travel time and similarity for 20-180 fig Fig S6
-#######################################################
-
- # Load necessary libraries
+```
+### Figure  S6A (Heatmap per mean travel time for 20-180)
+```
  library(ggplot2)
  library(maps)
  library(reshape2)
  library(dplyr)
  library(geosphere)
  
- # Load matrix
  mat <- as.matrix(read.table("SRF_20-180_mat_abundance_braycurtis.csv", sep=";", header=TRUE, row.names=1))
  df <- melt(mat)
- 
- # Remove self-connections
  new_df <- df[df$Var1 != df$Var2,]
  new_df$similarity <- 1 - new_df$value
  new_df$conx <- paste(new_df$Var1, new_df$Var2, sep="_")
- 
- # Merge with travel time data
  B <- read.csv2("filetime_2023-09-29_17-02-30_tiempo_stdtiempo.txt",sep = " ", header = F)
- head(B)
  colnames(B)<-c("Stazione.partenza"  ,"Stazione.arrivo","tempo.medio.giorni" ,"devStand.giorni")
- 
  B <- B[as.numeric(B$tempo.medio.giorni) >= 0, ]
  B <- B[B$Stazione.partenza != B$Stazione.arrivo, ]
  B$tempo.medio.anni <-  as.numeric(B$tempo.medio.giorni) / 365
  B$conx <- paste(B$Stazione.partenza, B$Stazione.arrivo, sep = "_")
- head(B)
- 
  C <- merge(new_df, B, by="conx")
- 
- # Filter network data
  my_network <- C[C$tempo.medio.anni <= 1.5,]
- 
- # Load coordinates
  coordinates <- read.csv("cytoscape_samples_coordinates.csv", sep=";")
- 
- # Calculate distance matrix
  points_list <- coordinates[coordinates$Sample %in% my_network$Var1,]
  dist_matrix <- distm(points_list[, c("Longitude", "Latitude")], fun = distVincentyEllipsoid)
  min_dist <- apply(dist_matrix, 2, function(x) sort(x)[2])
- 
- # Create edges data frame
  edges_df <- data.frame(
    from = rep(points_list$Sample, each = nrow(points_list)),
    to = rep(points_list$Sample, times = nrow(points_list)),
@@ -1257,12 +1147,8 @@ ggplot(data = df_completo, aes(x = zona, y = node_centrality)) +
  edges_df <- edges_df[edges_df$from != edges_df$to,]
  edges_df <- merge(edges_df, points_list, by.x="from", by.y="Sample")
  edges_df <- merge(edges_df, points_list, by.x="to", by.y="Sample", suffixes=c("", "_to"))
- 
- # Merge edges with network data
  df2 <- merge(edges_df, my_network, by.x=c("from", "to"), by.y=c("Var1", "Var2"))
  df1 <- filter(df2, similarity > 0)
- 
- # Classify ocean regions
  classify_ocean_region <- function(station) {
    if (grepl("^ANE", station)) {
      return("North Atlantic East")
@@ -1294,8 +1180,6 @@ ggplot(data = df_completo, aes(x = zona, y = node_centrality)) +
      return(NA)
    }
  }
- 
- 
  df1$Ocean_reg <- sapply(df1$from, classify_ocean_region)
  df1$Ocean_reg_to <- sapply(df1$to, classify_ocean_region)
  
@@ -1307,7 +1191,6 @@ ggplot(data = df_completo, aes(x = zona, y = node_centrality)) +
      mean_similarity = mean(similarity, na.rm = TRUE),
      .groups = 'drop'
    )
-# Heatmap per mean travel time
  ggplot(combined_links, aes(x = Ocean_reg, y = Ocean_reg_to, fill = mean_travel_time)) +
    geom_tile() +
    geom_text(aes(label = round(mean_travel_time, 2)), color = "white", size = 3) +
@@ -1319,8 +1202,9 @@ ggplot(data = df_completo, aes(x = zona, y = node_centrality)) +
    theme_minimal() +
    theme(axis.text.x = element_text(angle = 45, hjust = 1))
  
- 
- # Heatmap per mean_similarity
+```
+### Figure  S6B (Heatmap per mean similarity for 20-180)
+```
  ggplot(combined_links, aes(x = Ocean_reg, y = Ocean_reg_to, fill = mean_similarity)) +
    geom_tile() +
    geom_text(aes(label = round(mean_similarity, 2)), color = "white", size = 3) +
@@ -1332,38 +1216,26 @@ ggplot(data = df_completo, aes(x = zona, y = node_centrality)) +
    theme_minimal() +
    theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#co-assembly per zone
-
+```
+### Contigs Analysis
+10. **Megahit Co-Assembling using Vibrio reads**
+```
 cat sets.txt
-ARC
-ANE
-ANW
-ASE
-ASW
-ION
-IOS
-MED
-PON
-PSE
-PSW
-RED
-SOC
-
+```
+> ARC
+> ANE
+> ANW
+> ASE
+> ASW
+> ION
+> IOS
+> MED
+> PON
+> PSE
+> PSW
+> RED
+> SOC
+```
 for SET in `cat sets.txt`
 do
 R1s=`ls *_1.fa | python -c 'import sys; print(",".join([x.strip() for x in sys.stdin.readlines()]))'`
@@ -1371,20 +1243,18 @@ R2s=`ls *_2.fa | python -c 'import sys; print(",".join([x.strip() for x in sys.s
  megahit -1 $R1s -2 $R2s -o $SET-co-assembly.fa 
 done
 
-
-
-# CAT TAXONOMY sui contigs 
-
+```
+11. **CAT Species Taxonomy**
+```
 for i in *.fa
 do
-CAT contigs -c $i -d /home/userbio/CAT_prepare_20210107/2021-01-07_CAT_database -t /home/userbio/CAT_prepare_20210107/2021-01-07_taxonomy -o BAT_output/${i}_BAT
-CAT add_names -i BAT_output/${i}_BAT.contig2classification.txt -o BAT_off/${i}_.names_off.txt -t /home/userbio/CAT_prepare_20210107/2021-01-07_taxonomy --only_official
+CAT contigs -c $i -d CAT_prepare_20210107/2021-01-07_CAT_database -tCAT_prepare_20210107/2021-01-07_taxonomy -o BAT_output/${i}_BAT
+CAT add_names -i BAT_output/${i}_BAT.contig2classification.txt -o BAT_off/${i}_.names_off.txt -t CAT_prepare_20210107/2021-01-07_taxonomy --only_official
 CAT summarise -c $i -i BAT_off/${i}_.names_off.txt -o BAT_class/${i}_BAT_summ.txt
 done
-
-
-#quantification on contigs with salmon
-
+```
+12. **Salmon Quantification**
+```
 for i in *.fa
 do
     prefix=$(basename $i .fa)
@@ -1403,8 +1273,6 @@ salmon quant --meta -l A --index $i \
  -o quantification/${prefix}
 done
 
-
-
 for i in *PROT*_index
 do
 prefix=$(basename $i _index)
@@ -1416,7 +1284,9 @@ salmon quant --meta -l A --index $i  \
 -o quantification/${prefix}
 done
 
-#fig 4 A and B
+```
+### Figure  4A (Distribution of *Vibrio* species between FLV and PAV)
+```
 library(phyloseq)
 library(vegan)
 library(ggplot2)
@@ -1436,26 +1306,13 @@ abund_table<-read.csv("salmon/vibrio_tpm_frequency_table.csv",row.names=1, check
 dfTAX<-read.csv("salmon/TAX_vibrio_tpm_frequency_table.csv",row.names=1, check.names=FALSE,sep = ",")
 metaDF<-read.csv("salmon/metaTable_contigs.csv",row.names=1, check.names=FALSE,sep = ",")
  
-
-
-
 physeq<-merge_phyloseq(phyloseq(otu_table(as.matrix(abund_table), taxa_are_rows = T), tax_table(as.matrix(dfTAX)), sample_data(metaDF)))
 genus.sum = tapply(taxa_sums(physeq), tax_table(physeq)[, "specie"], sum, na.rm=TRUE)
 
-top5phyla = names(sort(genus.sum, TRUE))[1:20]
-physeq25 = prune_taxa((tax_table(physeq)[, "specie"] %in% top5phyla), physeq)
-
-physeq_norm<-normalize(physeq25, method = "RLE")
-# Define your phyloseq object
-physeq <- physeq_norm   # replace with your phyloseq object
-# Define your phyloseq object
-
-# Ensure physeq is of class phyloseq
-if (!inherits(physeq, "phyloseq")) {
-  stop("physeq must be an object of class 'phyloseq'")
-}
-
-# Transpose OTU table if necessary
+top20phyla = names(sort(genus.sum, TRUE))[1:20]
+physeq20 = prune_taxa((tax_table(physeq)[, "specie"] %in% top20phyla), physeq)
+physeq_norm<-normalize(physeq20, method = "RLE")
+physeq <- physeq_norm   
 if (!physeq@otu_table@taxa_are_rows) {
   otu_tab <- t(physeq@otu_table)
 } else {
@@ -1463,97 +1320,49 @@ if (!physeq@otu_table@taxa_are_rows) {
 }
 
 otu_tab <- as.data.frame(as(otu_tab, "matrix"))
-
-# Summarize OTU table by taxa
 tax_table <- as.data.frame(as(physeq@tax_table, "matrix"))
 tax_table$Taxon <- rownames(tax_table)
-
-# Merge OTU table with taxonomy table
 otu_taxa <- merge(otu_tab, tax_table, by = "row.names")
 rownames(otu_taxa) <- otu_taxa$Row.names
 otu_taxa$Row.names <- NULL
-
-# Specify the taxa level to use (e.g., "species")
-taxa <- "species"  # replace with the desired taxonomic level, if different
-
-# Summarize OTU counts by specified taxa rank and compartment (BACT or PROT)
+taxa <- "species"  
 taxa_counts <- otu_taxa %>%
   dplyr::group_by(across(all_of("species"))) %>%
   dplyr::summarise(across(starts_with("BACT_") | starts_with("PROT_"), sum)) %>%
   pivot_longer(cols = starts_with("BACT_") | starts_with("PROT_"),
                names_to = "Sample", values_to = "Abundance") %>%
   dplyr::mutate(Compartment = ifelse(grepl("^BACT_", Sample), "BACT", "PROT"))
-
- 
 taxa_counts <- taxa_counts %>%
   group_by(!!sym(taxa)) %>%
   mutate(Total = sum(Abundance)) %>%
   ungroup() %>%
-  mutate(Normalized_Abundance = Abundance / Total)
-
-
-
+  mutate(scaled_Abundance = Abundance / Total)
 taxa_order <- taxa_counts %>%
   filter(Compartment == "PROT") %>%
-  arrange(desc(Normalized_Abundance)) %>%
+  arrange(desc(scaled_Abundance)) %>%
   distinct(!!sym(taxa)) %>%
   pull(!!sym(taxa))
-
-# Convert taxa to a factor with levels ordered by PROT abundance
 taxa_counts <- taxa_counts %>%
   mutate(!!sym(taxa) := factor(!!sym(taxa), levels = unique(taxa_order)))
 
-ggplot(taxa_counts, aes(x = !!sym(taxa), y = Normalized_Abundance, fill = Compartment)) +
+ggplot(taxa_counts, aes(x = !!sym(taxa), y = scaled_Abundance, fill = Compartment)) +
   geom_bar(stat = "identity", position = "stack") +
-  coord_flip() +  # Make the bar plot horizontal
-  labs(title = "Normalized Abundance of Taxa in BACT and PROT Compartments",
-       x = "Taxa",
-       y = "Normalized Abundance") +
+  coord_flip() +
   theme_minimal() +
   theme(legend.position = "right")
 
-
-ggplot(taxa_counts, aes(x = !!sym(taxa), y = Normalized_Abundance, fill = Oceano   )) +
-  geom_bar(stat = "identity", position = "stack") +
-  coord_flip() +  # Make the bar plot horizontal
-  labs(title = "Normalized Abundance of Taxa in BACT and PROT Compartments by Ocean",
-       x = "Taxa",
-       y = "Normalized Abundance") +
-  theme_minimal() +
-  theme(legend.position = "right")
-
-
-### distribution oceanic regions
-
-
-
-# Ensure physeq is of class phyloseq
-if (!inherits(physeq, "phyloseq")) {
-  stop("physeq must be an object of class 'phyloseq'")
-}
-
-# Transpose OTU table if necessary
-if (!physeq@otu_table@taxa_are_rows) {
-  otu_tab <- t(physeq@otu_table)
-} else {
-  otu_tab <- physeq@otu_table
-}
+```
+### Figure  4A and B (Distribution of *Vibrio* species among oceanic regions)
+```
 
 otu_tab <- as.data.frame(as(otu_tab, "matrix"))
-
-# Summarize OTU table by taxa
 tax_table <- as.data.frame(as(physeq@tax_table, "matrix"))
 tax_table$Taxon <- rownames(tax_table)
-
-# Merge OTU table with taxonomy table
 otu_taxa <- merge(otu_tab, tax_table, by = "row.names")
 rownames(otu_taxa) <- otu_taxa$Row.names
 otu_taxa$Row.names <- NULL
-
-# Specify the taxa level to use (e.g., "species")
 taxa <- "species"  # replace with the desired taxonomic level, if different
 
-# Add metadata information
 metaDF <- data.frame(
   'Campione' = c(
     "BACT_ANE", "BACT_ARC", "BACT_ANW", "BACT_ASE", "BACT_ASW",
@@ -1574,7 +1383,6 @@ metaDF <- data.frame(
   )
 )
 
-# Merge with taxa_counts
 taxa_counts <- otu_taxa %>%
   group_by(across(all_of(taxa))) %>%
   summarise(across(starts_with("BACT_") | starts_with("PROT_"), sum)) %>%
@@ -1583,18 +1391,14 @@ taxa_counts <- otu_taxa %>%
   mutate(Compartment = ifelse(grepl("^BACT_", Sample), "BACT", "PROT")) %>%
   left_join(metaDF, by = c("Sample" = "Campione"))
 
-# Normalize values so that each taxon has the same total abundance
 taxa_counts <- taxa_counts %>%
   group_by(!!sym(taxa)) %>%
   mutate(Total = sum(Abundance)) %>%
   ungroup() %>%
-  mutate(Normalized_Abundance = Abundance / Total)
+  mutate(scaled_Abundance = Abundance / Total)
 
-ggplot(taxa_counts, aes(x = !!sym(taxa), y = Normalized_Abundance, fill = Oceano   )) +
+ggplot(taxa_counts, aes(x = !!sym(taxa), y = scaled_Abundance, fill = Oceano   )) +
   geom_bar(stat = "identity", position = "stack") +
-  coord_flip() +  # Make the bar plot horizontal
-  labs(title = "Normalized Abundance of Taxa in BACT and PROT Compartments by Ocean",
-       x = "Taxa",
-       y = "Normalized Abundance") +
+  coord_flip() +
   theme_minimal() +
   theme(legend.position = "right")
