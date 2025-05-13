@@ -1,3 +1,4 @@
+# The TARA metagenomes used in this study are available from NCBI PRJEB1787, PRJEB4352, PRJEB9740 and PRJEB9691
 # Deciphering the Hidden Ecology of Vibrio in the Oceans
 
 This pipeline processes metagenomic TARA Ocean to analyze the *Vibrio* presence in the oceans
