@@ -23,19 +23,10 @@ This pipeline processes metagenomic TARA Ocean to analyze the *Vibrio* presence 
 ## Script
 
 ```
-# Set the current path variable
 currpath=$(pwd)
-
-# Set the sample name file
 SAMPLE="samples_TARA.txt" #list of downloaded metagenomes
-
-# RefSeq Kraken2 database directory
 REFSEQ_KRA_DB="krakenDB_bacteria_refseq"
-
-# Enterobase Kraken2 database directory
 ENT_KRA_DB="enterobase_vibrio_KRAKEN2_db"
-
-# Output directories
 TRIM_OUT="${currpath}/trimming"
 REFSEQ_OUT="${TRIM_OUT}/kraken_refseq"
 ENT_OUT="${TRIM_OUT}/kraken_entero/entero_extraction"
@@ -96,8 +87,6 @@ TAX = tax_table(as.matrix(OTU_taxonomy))
 SAM = sample_data(meta_table)
 physeq<-merge_phyloseq(phyloseq(OTU, TAX, SAM))
 
-#Top 15 taxa
-
 genus.sum = tapply(taxa_sums(physeq), tax_table(physeq)[, "Genus"], sum, na.rm=TRUE)
 top15phyla = names(sort(genus.sum, TRUE))[1:15]
 GP1 = prune_taxa((tax_table(physeq)[, "Genus"] %in% top15phyla), physeq)
@@ -113,21 +102,15 @@ merge_samples_mean <- function(physeq, group){
   return(merged)
 }
 
-#merge by zone
+
 phyloseq_obj_css_Zone<- merge_samples_mean(GP1,"Zone")
-
-
 data_glom<- psmelt(phyloseq_obj_css_Zone) # create dataframe from phyloseq object
 data_glom$Genus <- as.character(data_glom$Genus)
 data_glom$Abundance<-(data_glom$Abundance*100)
-
- 
-
 newSTorder =c( "ANE","ANW","ASE",
                "ASW","ION" , "IOS","PON","PSE","PSW","MED" ,"RED","ARC","SOC")
 data_glom$Sample<- as.character(data_glom$Sample)
 data_glom$Sample <- factor(data_glom$Sample, levels=newSTorder)
-
 
 ggplot(data_glom, aes(x = Sample, y = fct_reorder(Genus, NEG_TOT_ABUNDANCE), size=Abundance, fill=Ocean)) + 
   geom_point(alpha=0.5, shape=21, color="black") +
@@ -154,7 +137,6 @@ VIBRIO <- subset_taxa(GP1, Genus=="Vibrio" )
 variable1 = as.character(get_variable(VIBRIO, "Zone"))
 variable2 = as.character(get_variable(VIBRIO, "Fraction3"))
 # variable3 = as.character(get_variable(physeq, "Distance1"))
-
 sample_data(VIBRIO)$NewPastedVar <- mapply(paste, variable1, variable2  
                                            , sep = "_")
 physeq_MERGED_zone_FRACTIONS<-merge_samples_mean(VIBRIO, "NewPastedVar")
@@ -206,10 +188,7 @@ variable2 = as.character(get_variable(VIBRIO, "Depth"))
 
 sample_data(VIBRIO)$NewPastedVar <- mapply(paste, variable1, variable2  
                                            , sep = "_")
-
 physeq_MERGED_zone_DEPTH<-merge_samples_mean(VIBRIO, "NewPastedVar")
- 
- 
 rm(df)
  
 ttt<-nrow(as.data.frame(sample_names(physeq_MERGED_zone_DEPTH)))
@@ -222,14 +201,10 @@ df$Zone <-foo$X1
 df$W_Layer <-foo$X2
 rownames(df) <- df[,1]
 sample_data(physeq_MERGED_zone_DEPTH)<-sample_data(df)
- 
-#remove mix zzz and na depths
 physeq_MERGED_zone_DEPTH<-subset_samples(physeq_MERGED_zone_DEPTH, !( ( W_Layer=="MIX" | W_Layer=="ZZZ"| W_Layer=="NA")))
-
 data_glom_depth<- psmelt(physeq_MERGED_zone_DEPTH)  
 data_glom_depth$Genus <- as.character(data_glom_depth$Genus)  
 data_glom_depth$Abundance<-(data_glom_depth$Abundance*100)
-
 depth_order = c(
   "SRF",
   "DCM",
@@ -316,36 +291,22 @@ library(concaveman)
 library(ggpubr)
 library(ggside)
 library(ggdist)
-#####                      importing data                           ####
-
 
 abund_table<-read.csv("input/braken_all_ENTERO_prokEprot_merged.csv",row.names=1, check.names=FALSE,sep = ";")
 abund_table<-t(abund_table)
 OTU_taxonomy<-read.csv("input/braken_all_ENTERO_prokEprot_merged_fract_INPUT_R_OTU_TAX.csv",row.names=1,check.names=FALSE,sep = ";")
 meta_table<-read.csv("input/braken_all_REFSEQ_prokEprot_merged_fract_METAWcooRd.csv",row.names=1,check.names=FALSE,sep = ";")
-
-#Convert the data to phyloseq format
 OTU = otu_table(as.matrix(abund_table), taxa_are_rows = T)
 TAX = tax_table(as.matrix(OTU_taxonomy))
 SAM = sample_data(meta_table)
 physeq<-merge_phyloseq(phyloseq(OTU, TAX, SAM))
-
-
-
 OTU_ceiling = otu_table(as.matrix(ceiling(abund_table)), taxa_are_rows = T)
-
 physeqCEILING<-merge_phyloseq(phyloseq(OTU_ceiling, TAX, SAM))
-
 physeqCEILING<-subset_samples(physeqCEILING, !(  Fraction=="NA" ))
-
 physeqCEILING<-subset_samples(physeqCEILING, !( ( Depth=="MIX" | Depth=="ZZZ"| Depth=="NA")))
-
 p1<-plot_richness(physeqCEILING,x="Latitude",color = "Fraction3",measures=c("Observed"),title = "Vibrio Species Richness")
-
 p1$data$Depth<- as.character(p1$data$Depth)
 p1$data$Depth <- factor(p1$data$Depth, levels=newSTorder)
-
-
 min(p1$data$Latitude)
 max(p1$data$Latitude)
 
