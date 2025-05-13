@@ -24,7 +24,7 @@ This pipeline processes metagenomic TARA Ocean to analyze the *Vibrio* presence 
 
 ```
 currpath=$(pwd)
-SAMPLE="samples_TARA.txt" #list of downloaded metagenomes
+SAMPLE="samples_TARA.txt" 
 REFSEQ_KRA_DB="krakenDB_bacteria_refseq"
 ENT_KRA_DB="enterobase_vibrio_KRAKEN2_db"
 TRIM_OUT="${currpath}/trimming"
@@ -104,7 +104,7 @@ merge_samples_mean <- function(physeq, group){
 
 
 phyloseq_obj_css_Zone<- merge_samples_mean(GP1,"Zone")
-data_glom<- psmelt(phyloseq_obj_css_Zone) # create dataframe from phyloseq object
+data_glom<- psmelt(phyloseq_obj_css_Zone) 
 data_glom$Genus <- as.character(data_glom$Genus)
 data_glom$Abundance<-(data_glom$Abundance*100)
 newSTorder =c( "ANE","ANW","ASE",
@@ -224,8 +224,8 @@ min(data_glom_depth$Abundance)
 max(data_glom_depth$Abundance)
 mean(data_glom_depth$Abundance)
 
-bb_depth <- c(0, 0.5,1,1.5,2,2.5,3) # define breaks.
-ll_depth <- c("0%","0.5%","1%","1.5%","2%","2.5%","3%") # labels.
+bb_depth <- c(0, 0.5,1,1.5,2,2.5,3)  
+ll_depth <- c("0%","0.5%","1%","1.5%","2%","2.5%","3%")
 
 
  ggplot(data_glom_depth, aes(Zone, W_Layer, fill= Abundance)) + 
@@ -328,7 +328,7 @@ variable2 = as.character(get_variable(physeq, "Fraction3"))
 sample_data(physeq)$NewPastedVar <- mapply(paste, variable1, variable2  
                                            , sep = "_")
 
-physeq_MERGED_zone_FRACTION<-merge_samples_mean(physeq, "NewPastedVar")#cambiato er fare la mantel, per fare b div ricalcolarlo DHN 
+physeq_MERGED_zone_FRACTION<-merge_samples_mean(physeq, "NewPastedVar")
 rm(df)
 RR<-nrow(as.data.frame(sample_names(physeq_MERGED_zone_FRACTION)))
 df <- data.frame(matrix(ncol = 1, nrow = RR))
@@ -347,12 +347,12 @@ physeq_MERGED_zone_FRACTION1<-subset_samples(physeq_MERGED_zone_FRACTION, !(  Fr
 
 otu.ord <- ordinate(physeq = physeq_MERGED_zone_FRACTION1, "PCoA")
 
-
 a<-plot_ordination(physeq = physeq_MERGED_zone_FRACTION1, otu.ord,color = "Fraction",shape = "Ocean",
                    axes =c(1,2))+
   geom_text(aes(label=Zone), Fraction = 3, vjust = 0,hjust=0, show.legend = FALSE)+
   theme(plot.title = element_text(hjust = 0.0))+ geom_point(Fraction = 2)+ theme_void()+theme_bw()
-a1<-a+  geom_mark_ellipse(aes(color = Fraction), show.legend = FALSE)+ theme_void()+theme_bw() + geom_xsidedensity(aes(y=stat(density),fill=Fraction), alpha = 0.5, show.legend = FALSE) +
+a1<-a+  geom_mark_ellipse(aes(color = Fraction), show.legend = FALSE)+ theme_void()+theme_bw() +
+geom_xsidedensity(aes(y=stat(density),fill=Fraction), alpha = 0.5, show.legend = FALSE) +
   geom_ysidedensity(aes(x=stat(density),fill=Fraction), alpha = 0.5, show.legend = FALSE) +
   theme_bw() +  scale_xsidey_continuous(breaks = NULL, labels = "", expand = expansion(c(0,.1))) +
   scale_ysidex_continuous(breaks = NULL, labels = "", expand = expansion(c(0,.1))) +scale_ysidex_discrete()+
@@ -430,24 +430,22 @@ file_paths <- c(
 
 matrices <- lapply(file_paths, read.csv, row.names = 1, sep = ";")
 pcoa_results <- lapply(matrices, function(matrix) {
-  dist_matrix <- as.dist(matrix) # Assicurati che sia una matrice di distanza
+  dist_matrix <- as.dist(matrix) 
   cmdscale(dist_matrix, eig = TRUE, k = 3, add = TRUE)  
 })
 
 
 names(pcoa_results) <- c("0.22-3", "3-20", "20-180", "180-2000")
 
-# Calcolo dei valori RGB per ogni set di risultati PCoA
+
 rgb_results <- lapply(pcoa_results, function(result) {
-  coordinates <- result$points[, 1:3] # Primi tre assi principali
-  eigenvalues <- result$eig[1:3] # Primi tre autovalori
+  coordinates <- result$points[, 1:3] 
+  eigenvalues <- result$eig[1:3]
+  lambda_r <- 1
+  lambda_g <- eigenvalues[2] / eigenvalues[1] 
+  lambda_b <- eigenvalues[3] / eigenvalues[1] 
   
-  lambda_r <- 1 # Rapporto per il canale rosso
-  lambda_g <- eigenvalues[2] / eigenvalues[1] # Rapporto per il canale verde
-  lambda_b <- eigenvalues[3] / eigenvalues[1] # Rapporto per il canale blu
-  
-  # Conversione delle coordinate in valori RGB
-  convert_to_rgb <- function(coord, lambda) {
+    convert_to_rgb <- function(coord, lambda) {
     128 * (1 + lambda * coord / max(abs(coord)))
   }
   
@@ -466,22 +464,18 @@ rgb_results <- lapply(pcoa_results, function(result) {
 coordinate <- read.csv2("cytoscape_samples_coordinates.csv", sep = ";")
 for (set_name in names(rgb_results)) {
   
-  # Unione dei risultati RGB con le coordinate
-  rgb_df <- data.frame(Sample = rownames(rgb_results[[set_name]]), rgb_results[[set_name]], stringsAsFactors = FALSE)
+    rgb_df <- data.frame(Sample = rownames(rgb_results[[set_name]]), rgb_results[[set_name]], stringsAsFactors = FALSE)
   merged_data <- merge(coordinate, rgb_df, by = "Sample")
   
-  # Assicurati che r, g, b siano numerici e non fattori o caratteri
-  merged_data$r <- as.numeric(as.character(merged_data$r))
+   merged_data$r <- as.numeric(as.character(merged_data$r))
   merged_data$g <- as.numeric(as.character(merged_data$g))
   merged_data$b <- as.numeric(as.character(merged_data$b))
   
-  # Funzione per riscalare i valori in una gamma specifica (0-255)
-  rescale_to_255 <- function(x) {
+    rescale_to_255 <- function(x) {
     (x - min(x)) / (max(x) - min(x)) * 255
   }
   
-  # Riscalare i valori RGB
-  rescale_rgb <- function(rgb_df) {
+ rescale_rgb <- function(rgb_df) {
     rgb_df$r <- rescale_to_255(rgb_df$r)
     rgb_df$g <- rescale_to_255(rgb_df$g)
     rgb_df$b <- rescale_to_255(rgb_df$b)
@@ -490,22 +484,17 @@ for (set_name in names(rgb_results)) {
   
   rescaled_rgb_df <- rescale_rgb(rgb_df)
   rescaled_data <- merge(coordinate, rescaled_rgb_df, by = "Sample")
-  
-  # Conversione dei valori RGB in colori esadecimali
-  merged_data$color <- apply(merged_data[, c("r", "g", "b")], 1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
-  
- 
+    merged_data$color <- apply(merged_data[, c("r", "g", "b")], 1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 255))
   ggplot() +
-    borders("world", colour = "gray50", fill = "gray50") + # Aggiunge i confini del mondo
+    borders("world", colour = "gray50", fill = "gray50") + 
     geom_point(data = merged_data, aes(x = as.numeric(Longitude), y = as.numeric(Latitude), color = color), size = 3) +
-    scale_color_identity() + # Usa i colori come forniti
+    scale_color_identity() + 
     theme_minimal() +
     labs(x = "Longitudine", y = "Latitudine") +
-    coord_fixed(1.3) + # Mantiene le proporzioni corrette
+    coord_fixed(1.3) + 
     ggtitle(paste("Mappa per il set", set_name))
   
-  # Visualizzazione del grafico PCoA con colori normalizzati
-  pcoa_coords <- as.data.frame(pcoa_results[[set_name]]$points[, 1:2])
+    pcoa_coords <- as.data.frame(pcoa_results[[set_name]]$points[, 1:2])
   colnames(pcoa_coords) <- c("PC1", "PC2")
   
   merged_data_pcoa_rgb <- cbind(pcoa_coords, normalized_rgb_df)
@@ -522,15 +511,13 @@ for (set_name in names(rgb_results)) {
 
   c <- nlcor(merged_data_pcoa_rgb$PC1, merged_data_pcoa_rgb$PC2)
   
-  # Creazione di un data frame e aggiunta alla lista
-  df_new <- data.frame(Fraction = set_name, Value = c$cor.estimate)
+ df_new <- data.frame(Fraction = set_name, Value = c$cor.estimate)
   df_list[[set_name]] <- df_new
 }
 
 
 df_combined <- bind_rows(df_list)
 ## fig 2B
-# Creazione del grafico unico con tutti i range
 ggplot(df_combined, aes(x = Fraction, y = Value, fill = Fraction)) +
   geom_point(aes(color = Fraction)) +
   geom_line(aes(group = Fraction)) +
@@ -565,9 +552,7 @@ cumCorr <- function(file_){
   CC2 <- CC[order(CC$tempo.medio.anni),]
   DB <- data.frame()
   for(i in 4:dim(CC2)[1]) {
-    #print(i)
     CC_1<-CC2[1:i,]
-    #print(CC_1)
     cc <- cor.test(as.numeric(CC_1$tempo.medio.anni),as.numeric(CC_1$dissimilarity),method = "spearman")$estimate
     ci <- computeConfidence(cc,i)
     DB <- rbind(DB,c(CC2[i,11],cc))
@@ -666,7 +651,7 @@ for (file_path in file_paths) {
 plot <- ggplot()
 for (fraction in names(correlation_data)) {
   df <- correlation_data[[fraction]]
-  df$fraction <- factor(reorder(df$fraction, -df$tempo.medio.anni), levels = fraction_levels)  # Definizione dei livelli della variabile "fraction" con ordine inverso della dist_km
+  df$fraction <- factor(reorder(df$fraction, -df$tempo.medio.anni), levels = fraction_levels) 
   plot <- plot + geom_smooth(data = df, aes(y = similarity, x = tempo.medio.anni, color = fraction), method = "lm") +
     geom_smooth(data = df, aes(y = similarity, x = tempo.medio.anni), method = "lm", color = color_palette[fraction], fill = color_palette[fraction], alpha = 0.2)
 }
@@ -757,8 +742,6 @@ all_data <- bind_rows(correlation_data)
 unique_data <- all_data %>% distinct(conx, .keep_all = TRUE)
 
 unique_data<-unique_data[, !(names(unique_data) %in% c("X1", "X", "Var1.x" , "Var2.x","Var1.y"  ,"Var2.y"))]
-
-
 write.csv(unique_data, "unique_conx_data.csv", row.names = FALSE)
 
 ```
@@ -875,7 +858,6 @@ library(geosphere)
 library(ggplot2)
 
 process_file <- function(file_path, time_travel_file, coordinates_file, matrix_name) {
-  # Caricare la matrice dal file CSV
   mat <- as.matrix(read.table(file_path, sep=";", header=TRUE, row.names=1))
 
   df <- melt(mat)
@@ -895,7 +877,7 @@ process_file <- function(file_path, time_travel_file, coordinates_file, matrix_n
   dist_matrix <- distm(points_list[, c("Longitude", "Latitude")], fun = distVincentyEllipsoid)
   min_dist <- apply(dist_matrix, 2, function(x) {
     dists <- sort(x)
-    dists[2] # La seconda distanza più piccola è la distanza dal punto più vicino
+    dists[2] 
   })
   edges_df <- data.frame(
     from = rep(points_list$Sample, each = nrow(points_list)),
@@ -1069,7 +1051,7 @@ ggplot(data = df_completo, aes(x = zona, y = node_centrality)) +
    ggplot(data = top_stazioni_filtrato, aes(x = nodo, y = node_centrality, fill = nome_file)) +
      geom_bar(stat = "identity") +
      coord_flip() +
-     labs(x = "Stazione", y = "node_centrality", title = "Top 150 stazioni più rilevanti") +
+     labs(x = "Stazione", y = "node_centrality") +
      theme_minimal()
    
 ```
@@ -1320,8 +1302,7 @@ tax_table$Taxon <- rownames(tax_table)
 otu_taxa <- merge(otu_tab, tax_table, by = "row.names")
 rownames(otu_taxa) <- otu_taxa$Row.names
 otu_taxa$Row.names <- NULL
-taxa <- "species"  # replace with the desired taxonomic level, if different
-
+taxa <- "species" 
 metaDF <- data.frame(
   'Campione' = c(
     "BACT_ANE", "BACT_ARC", "BACT_ANW", "BACT_ASE", "BACT_ASW",
