@@ -1343,3 +1343,116 @@ ggplot(taxa_counts, aes(x = !!sym(taxa), y = scaled_Abundance, fill = Oceano   )
   coord_flip() +
   theme_minimal() +
   theme(legend.position = "right")
+
+
+
+
+
+
+
+```
+### k-mers benchmark fig S3
+```
+mess run -i input_strain.tsv  --accession -o mess_out --threads 30
+
+
+for k in 21, 31,51 ; do
+  echo "Running Simka with k-mer size $k"
+  simka \
+    -in simka_input.txt \
+    -out results_k$k \
+    -out-tmp results_k$k/temp_output \
+    -kmer-size $k \
+    -max-merge 4 \
+    -min-shannon-index 1.5 -max-reads 0
+
+
+cat mutate_fastq.py
+#!/usr/bin/env python3
+import gzip
+import random
+import sys
+import os
+
+def mutate_fastq(fq_in, fq_out, mutation_rate=0.002, seed=42):
+    random.seed(seed)
+    with gzip.open(fq_in, 'rt') as fin, gzip.open(fq_out, 'wt') as fout:
+        while True:
+            header = fin.readline()
+            if not header:
+                break
+            seq = fin.readline().strip()
+            plus = fin.readline()
+            qual = fin.readline()
+
+            seq_mut = list(seq)
+            for i in range(len(seq)):
+                original = seq[i].upper()
+                if original not in "ATCG":
+                    continue
+                if random.random() < mutation_rate:
+                    bases = [b for b in "ATCG" if b != original]
+                    seq_mut[i] = random.choice(bases)
+
+            fout.write(header)
+            fout.write(''.join(seq_mut) + '\n')
+            fout.write(plus)
+            fout.write(qual)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        print("Usage: python mutate_fastq.py input.fq.gz output.fq.gz mutation_rate")
+        sys.exit(1)
+    fq_in = sys.argv[1]
+    fq_out = sys.argv[2]
+    mutation_rate = float(sys.argv[3])
+    mutate_fastq(fq_in, fq_out, mutation_rate)
+
+for sample in A B C D E; do
+  for rate in 0.002 0.005 0.01; do
+    for direction in R1 R2; do
+      in_file="Sample_${sample}_${direction}.fq.gz"
+      out_file="Sample_${sample}_${direction}_mut$(echo $rate | sed 's/0\.//').fq.gz"
+      ./mutate_fastq.py "$in_file" "mutaded/$out_file" "$rate"
+    done
+  done
+done
+
+
+percentuali=(1 10 20 50 80 100)
+
+# Loop su tutti i file R1 e R2
+for fq in Sample_*_R[12].fq.gz; do
+  for p in "${percentuali[@]}"; do
+    # Nome file in output
+    out="subsampled/${fq%.fq.gz}_sub${p}.fq.gz"
+    mkdir -p subsampled
+    echo "Subsampling $fq to $p% -> $out"
+    seqkit sample -p $(echo "$p / 100" | bc -l) -s 42 "$fq" | gzip > "$out"
+  done
+done
+
+
+percentuali=(1 10 20 50 80 100)
+samples=(A B C D E)
+
+outfile="simka_input.txt"
+> "$outfile"  # svuota il file prima di scriverci
+
+for s in "${samples[@]}"; do
+  for p in "${percentuali[@]}"; do
+    id="Sample_${s}_sub${p}"
+    r1="Sample_${s}_R1_sub${p}.fq.gz"
+    r2="Sample_${s}_R2_sub${p}.fq.gz"
+    echo "${id}: ${r1} ; ${r2}" >> "$outfile"
+  done
+done
+
+
+simka \
+    -in simka_input.txt \
+    -out results_normalizzati \
+    -out-tmp results_normalizzati/temp_output \
+    -kmer-size 31 \
+    -max-merge 4 \
+    -min-shannon-index 1.5 -max-reads 0
