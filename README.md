@@ -1421,10 +1421,9 @@ done
 
 percentuali=(1 10 20 50 80 100)
 
-# Loop su tutti i file R1 e R2
 for fq in Sample_*_R[12].fq.gz; do
   for p in "${percentuali[@]}"; do
-    # Nome file in output
+   
     out="subsampled/${fq%.fq.gz}_sub${p}.fq.gz"
     mkdir -p subsampled
     echo "Subsampling $fq to $p% -> $out"
@@ -1437,7 +1436,7 @@ percentuali=(1 10 20 50 80 100)
 samples=(A B C D E)
 
 outfile="simka_input.txt"
-> "$outfile"  # svuota il file prima di scriverci
+> "$outfile"  
 
 for s in "${samples[@]}"; do
   for p in "${percentuali[@]}"; do
